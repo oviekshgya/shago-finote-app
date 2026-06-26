@@ -1,6 +1,24 @@
-# Shago Notif Listener
+# Shago Finote - Personal Finance Management App
 
-Android Notification Listener MVP berbasis React Native CLI, TypeScript, dan Kotlin.
+**Status**: Phase 1-3 Complete ✅ | In Development 🚀
+
+Android Personal Finance Manager aplikasi berbasis React Native, TypeScript, Kotlin dengan financial tracking dari notifikasi bank & e-wallet Indonesia secara otomatis.
+
+## What's New (Revamp)
+
+**From**: Basic Notification Listener → **To**: Full-Featured Financial Management App
+
+- ✅ **Phase 1**: Domain models & AsyncStorage layer untuk financial transactions
+- ✅ **Phase 2**: Rule-based parser untuk konversi notifikasi ke transaksi (support BCA, BRI, Mandiri, DANA, OVO, GCash)
+- ✅ **Phase 3**: Bottom tab navigation dengan 5 main screens (Dashboard, Transactions, Add, Bills, Settings)
+- ⏳ **Phase 4**: Analytics & charts untuk cashflow visualization
+- ⏳ **Phase 5**: Full CRUD untuk transaction management
+- ⏳ **Phase 6**: Bills & recurring payment management
+
+Dokumentasi lengkap:
+- `REVAMP_FINOTE_PLAN.md` - Rencana revamp lengkap (33 sections)
+- `IMPLEMENTATION_SUMMARY.md` - Phase 1-3 summary dengan architecture
+- `NEXT_IMPLEMENTATION_STEPS.md` - Detailed tasks untuk Phase 4-6
 
 ## Fitur
 
