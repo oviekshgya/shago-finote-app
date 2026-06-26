@@ -1235,3 +1235,313 @@ Jika implementasi terlalu besar dalam satu langkah, pecah menjadi PR/phase:
 - PR 4: transaksi manual/edit/detail.
 - PR 5: bills/due dates.
 - PR 6: docs, tests, hardening.
+
+## 27. Environment dan Development Setup
+
+### 27.1 Prerequisites
+
+Sebelum mengerjakan revamp, pastikan:
+
+- Node.js 18+
+- Android SDK 34 (Android 14)
+- Android NDK (jika build native dari nol)
+- Ruby 2.7+ (untuk Fastlane jika ingin build automation)
+- Kotlin 1.9+
+
+### 27.2 Development Environment
+
+Command-command yang digunakan:
+
+```bash
+# Install dependencies
+npm install
+# atau
+yarn install
+
+# Jalankan di emulator/device
+npx react-native run-android
+
+# Build debug APK
+cd android && ./gradlew assembleDebug
+
+# Build release APK (setelah setup signing)
+cd android && ./gradlew assembleRelease
+
+# Lint TypeScript
+npm run lint
+# atau npx tsc --noEmit
+
+# Format kode
+npm run format
+# atau prettier --write "src/**/*.{ts,tsx}"
+
+# Run tests jika ada
+npm test
+```
+
+### 27.3 Git Workflow untuk Implementasi
+
+Disarankan:
+
+```bash
+# Branch untuk setiap phase
+git checkout -b feat/finance-phase-1-foundation
+# ... implementasi phase 1
+git push origin feat/finance-phase-1-foundation
+# Create PR untuk review
+
+git checkout -b feat/finance-phase-2-parser
+# ... implementasi phase 2
+# ... dan seterusnya
+
+# Merge ke master setelah review
+git merge --no-ff feat/finance-phase-1-foundation
+```
+
+## 28. Debugging dan Troubleshooting
+
+### 28.1 Common Issues
+
+**Issue: Notification Access tidak muncul di Settings**
+- Native module tidak terinisialisasi
+- AndroidManifest.xml tidak punya service declaration
+- Device OS terlalu lama, Notification Access feature belum ada
+
+**Solusi:**
+- Restart app dan emulator
+- Check logcat: `adb logcat | grep NotifListenerService`
+- Pastikan target SDK 34+
+
+### 28.2 Parser Issues
+
+**Issue: Notifikasi tidak diparsing menjadi transaksi**
+- Parser rule tidak cocok untuk format bank itu
+- Nominal tidak terdeteksi karena format unik
+- Confidence score terlalu rendah
+
+**Solusi:**
+- Periksa raw notification di debug screen
+- Tambahkan test fixture untuk bank itu
+- Turunkan confidence threshold sementara atau review rule
+
+### 28.3 Storage Issues
+
+**Issue: Data hilang setelah app force-close**
+- AsyncStorage write belum complete
+- Memory pressure membuat data terevict
+- Perlu implement persistent storage lebih kuat
+
+**Solusi:**
+- Jika fase MVP, catat di issue untuk upgrade storage nanti
+- Test dengan besar data typical
+- Implementasikan error handling dan recovery
+
+### 28.4 Performance Issues
+
+**Issue: App lambat saat lihat 1000+ transaksi**
+- Rendering list tidak virtualized
+- Parse setiap notifikasi blocking
+
+**Solusi:**
+- Implementasikan FlatList dengan getItemLayout
+- Defer parsing ke background atau batch
+- Profile dengan React Profiler
+
+## 29. Dokumentasi untuk End User
+
+### 29.1 User Guide - Quick Start
+
+```md
+# Panduan Cepat Shago Finote
+
+## Setup Awal
+
+1. Install app dari APK.
+2. Buka app.
+3. Tap "Buka Notification Access".
+4. Aktifkan permission untuk Finote.
+5. Kembali ke app dan tap "Pilih Sumber Rekening".
+6. Pilih aplikasi bank/e-wallet yang pakai.
+7. Notifikasi transaksi akan otomatis tercatat.
+
+## Fitur Utama
+
+### Dashboard
+- Lihat ringkasan pemasukan/pengeluaran hari ini dan bulan ini.
+- Lihat cashflow chart 7 atau 30 hari.
+
+### Transaksi
+- Lihat semua transaksi otomatis dari notifikasi.
+- Search, filter, dan edit transaksi.
+- Kategorikan pengeluaran.
+- Tandai transaksi yang salah diparsing.
+
+### Tambah Manual
+- Catat transaksi tunai.
+- Catat transaksi yang tidak ada notifikasinya.
+
+### Tagihan Jatuh Tempo
+- Catat pembayaran keluar yang akan jatuh tempo.
+- Set reminder dan repeat bulanan.
+
+### Privasi & Pengaturan
+- Data disimpan lokal di HP.
+- Tidak ada data dikirim ke server tanpa aksi user.
+- Raw notification bisa dihapus kapan saja.
+```
+
+### 29.2 FAQ
+
+**Q: Apakah data saya aman?**
+A: Ya. Data transaksi disimpan lokal di HP, tidak dikirim ke server. Jika backend ditambahkan nanti, perlu login dan opt-in sync eksplisit.
+
+**Q: Bagaimana jika parser salah parsering?**
+A: Kamu bisa edit transaksi di aplikasi. Kategori, nominal, tipe bisa diubah manual.
+
+**Q: Apakah notification access perlu terus aktif?**
+A: Ya, agar app bisa baca notifikasi transaksi. Jika dimatikan, transaksi baru tidak akan tercatat otomatis.
+
+**Q: Bagaimana kalau aplikasi bank saya tidak terbaca?**
+A: Buka Notification Access, pastikan aplikasi bank sudah diaktifkan. Jika masih tidak masuk, format notifikasi bank mungkin belum masuk parser. Kirim laporan dengan raw notification ke debug screen.
+
+**Q: Bisakah saya menghapus notifikasi lama?**
+A: Ya, di Settings → Hapus Log Notifikasi. Transaksi yang sudah tersimpan tidak akan dihapus, hanya raw log.
+
+## 30. Kontak dan Support
+
+### 30.1 Feedback Channel
+
+Untuk revamp ini:
+
+- Internal feedback: internal wiki / Slack
+- GitHub issues: untuk bug dan feature request
+- Beta tester: device testing log
+
+### 30.2 Maintenance Schedule
+
+Rencana maintenance setelah MVP launch:
+
+- **Week 1-2**: Monitor crash logs, parser accuracy.
+- **Week 3-4**: Feedback loop, tune parser rules.
+- **Month 2**: Add missing parser rules untuk bank baru.
+- **Month 3**: QA backend integration, design API.
+- **Month 4+**: Implement backend, sync, auth.
+
+## 31. Success Metrics
+
+Setelah MVP launch, track:
+
+### Technical Metrics
+- Crash rate < 0.1%
+- Parser accuracy > 95%
+- App latency < 200ms for list scroll
+- Storage efficiency (DB size / transaction count)
+
+### User Metrics
+- DAU (Daily Active Users)
+- Transaction captured per user per day
+- Manual edit rate (indicator of parser confidence)
+- Feature usage: dashboard vs transactions vs bills
+
+### Quality Metrics
+- Parser rule coverage untuk bank Indonesia top 10
+- Test coverage untuk parser dan repository > 80%
+- No critical security issues
+- Notification permission explanation clarity (survey)
+
+## 32. Appendix: Checklist Final Sebelum Release
+
+- [ ] **Code Quality**
+  - [ ] Tidak ada console.log di production code
+  - [ ] TypeScript strict mode tidak ada error
+  - [ ] Lint status clean
+  - [ ] Tidak ada TODO/FIXME kritis
+
+- [ ] **Functionality**
+  - [ ] Notification Access bisa dibuka dari app
+  - [ ] Source app selection berfungsi
+  - [ ] Notifikasi transaksi otomatis tersimpan
+  - [ ] Dashboard menampilkan angka benar
+  - [ ] Edit transaksi menyimpan perubahan
+  - [ ] Tambah transaksi manual berfungsi
+  - [ ] Tagihan upcoming/overdue status tepat
+  - [ ] Data tersimpan setelah app ditutup
+
+- [ ] **Privacy & Security**
+  - [ ] Tidak ada permission sensitif (SMS, Contacts, etc)
+  - [ ] Data tidak dikirim ke server default
+  - [ ] Raw notification viewer hanya untuk debug
+  - [ ] OTP/password/login notif tidak tersimpan
+
+- [ ] **Android-Specific**
+  - [ ] Build debug APK sukses
+  - [ ] Build release APK sukses
+  - [ ] AndroidManifest.xml lengkap
+  - [ ] Signing key tersimpan aman
+  - [ ] Min SDK 26, Target SDK 34
+
+- [ ] **Documentation**
+  - [ ] README.md sesuai produk baru
+  - [ ] BUILD_APK.md tetap valid
+  - [ ] User guide disiapkan
+  - [ ] API docs untuk future backend disiapkan
+
+- [ ] **Testing**
+  - [ ] Manual test di 2+ device Android
+  - [ ] Vertical test: empty state → add notification → edit → delete
+  - [ ] Edge case: offline, low storage, old Android version
+  - [ ] Parser tested dengan 10+ fixture notifikasi
+
+- [ ] **Deployment**
+  - [ ] Release notes disiapkan
+  - [ ] APK size reasonable (< 100MB)
+  - [ ] Crash analytics bisa dimonitor
+  - [ ] User feedback channel terbuka
+
+## 33. Catatan Teknis untuk Review Post-Implementation
+
+### Hal yang Wajib Dicheck
+
+1. **Native Module Integrity**
+   - NotifListenerService masih berjalan
+   - NotificationStore masih simpan raw log
+   - No new permissions di manifest
+   - Backward compatibility tetap
+
+2. **Data Model Correctness**
+   - FinancialTransaction punya unique id
+   - Deduplication logic benar
+   - Sync metadata fields lengkap (syncStatus, remoteId, updatedAt)
+
+3. **Parser Accuracy**
+   - Minimal 5 test case per bank (BCA, BRI, Mandiri, DANA, OVO)
+   - Income/expense classification > 95%
+   - OTP/promo/login excluded > 99%
+   - Nominal parsing handle Rp.XXX dan IDR XXX format
+
+4. **UI/UX Quality**
+   - Empty state helpful dan bukan error page
+   - Loading state ada untuk long-running operations
+   - Confirmation dialog untuk delete/clear
+   - Dark mode supported atau planned
+
+5. **Performance**
+   - List scroll smooth (60 FPS target)
+   - Parse 100 notifications < 100ms
+   - App startup < 2 sec
+
+6. **Documentation**
+   - User-facing copy jelas dan tidak misleading
+   - README lengkap dengan build instructions
+   - Future backend API schema documented
+
+### Follow-up Tasks untuk Phase Berikutnya
+
+1. **Backend Integration** - Design dan implement API endpoints
+2. **Authentication** - Add login/register flow
+3. **Sync & Conflict Resolution** - Implement replication logic
+4. **Advanced Parser** - Add OCR, receipt recognition, spending analytics
+5. **Export & Reporting** - PDF report, CSV export, budget tracking
+6. **Notifications** - Local reminder untuk bills, daily summary
+7. **Analytics** - Track app usage, parser accuracy, user behavior
+8. **Multi-Device** - Sync across devices, cloud backup
