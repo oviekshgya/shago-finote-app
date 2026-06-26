@@ -213,7 +213,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 Jika gagal karena signature berbeda atau versi lama, uninstall app dulu:
 
 ```bash
-adb uninstall com.shago.notiflistener
+adb uninstall com.shago.finote
 adb install android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -330,7 +330,7 @@ android/app/build/outputs/apk/release/app-release.apk
 Jika sebelumnya install debug APK dengan package yang sama, uninstall dulu karena signature bisa berbeda:
 
 ```bash
-adb uninstall com.shago.notiflistener
+adb uninstall com.shago.finote
 adb install android/app/build/outputs/apk/release/app-release.apk
 ```
 
@@ -437,4 +437,3 @@ Cek:
 - Source app tidak difilter keluar.
 - Matikan lalu nyalakan lagi Notification Access.
 - Restart device jika listener tidak connect.
-
