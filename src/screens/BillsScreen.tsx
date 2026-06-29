@@ -14,7 +14,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {ModernCard} from '../components/ModernCard';
+import {ModernButton} from '../components/ModernButton';
+import {ModernInput} from '../components/ModernInput';
+import {colors, spacing, typography, borderRadius} from '../theme/spacing';
 import {FinancialStorage} from '../storage/FinancialStorage';
 import type {DueDate} from '../types/FinancialTransaction';
 import {formatCurrency, formatTransactionDate} from '../utils/TransactionUtils';
@@ -105,8 +110,12 @@ export default function BillsScreen(): React.JSX.Element {
   };
 
   return (
-    <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
-      <StatusBar barStyle="light-content" backgroundColor="#111113" />
+    <LinearGradient
+      colors={colors.gradients.background}
+      start={{x: 0, y: 0}}
+      end={{x: 1, y: 1}}
+      style={[styles.container, { paddingTop: Math.max(insets.top, 0) }]}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>Tagihan</Text>
@@ -180,7 +189,7 @@ export default function BillsScreen(): React.JSX.Element {
           items.map(item => <BillItem key={item.id} item={item} onPaid={() => markPaid(item)} />)
         )}
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -244,24 +253,23 @@ function formatRupiahInput(value: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
   },
   content: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   header: {
-    marginBottom: 18,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: typography.h1,
+    fontWeight: '800',
+    color: colors.text,
   },
   subtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#9ca3af',
+    marginTop: spacing.sm,
+    fontSize: typography.label,
+    color: colors.textSecondary,
   },
   formCard: {
     padding: 14,
