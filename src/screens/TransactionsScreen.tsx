@@ -52,14 +52,15 @@ export default function TransactionsScreen(): React.JSX.Element {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Transaksi</Text>
+        <Text style={styles.subtitle}>{filtered.length} transaksi ditemukan</Text>
       </View>
 
       {/* Search & Filter */}
       <View style={styles.controlsContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Cari transaksi..."
-          placeholderTextColor="#9b8c86"
+          placeholder="Cari transaksi, merchant..."
+          placeholderTextColor="#9ca3af"
           value={search}
           onChangeText={setSearch}
         />
@@ -75,7 +76,7 @@ export default function TransactionsScreen(): React.JSX.Element {
                   styles.filterButtonText,
                   filterType === type && styles.filterButtonTextActive,
                 ]}>
-                {type === 'all' ? 'Semua' : type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
+                {type === 'all' ? 'Semua' : type === 'income' ? 'Masuk' : 'Keluar'}
               </Text>
             </Pressable>
           ))}
@@ -157,11 +158,17 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,
+    paddingBottom: 12,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
     color: '#ffffff',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#9ca3af',
   },
   controlsContainer: {
     paddingHorizontal: 16,
@@ -171,10 +178,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#2a2a2c',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 11,
     color: '#ffffff',
     marginBottom: 12,
-    fontSize: 14,
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: '#303036',
   },
   filterButtons: {
     flexDirection: 'row',
@@ -182,24 +191,26 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 7,
     backgroundColor: '#2a2a2c',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: '#2a2a2c',
   },
   filterButtonActive: {
     backgroundColor: '#c9152a',
+    borderColor: '#c9152a',
   },
   filterButtonText: {
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '600',
-    color: '#9b8c86',
+    color: '#9ca3af',
   },
   filterButtonTextActive: {
     color: '#ffffff',
+    fontWeight: '700',
   },
   centerContainer: {
     flex: 1,
@@ -210,47 +221,52 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 32,
   },
   emptyText: {
     fontSize: 14,
-    color: '#9b8c86',
+    color: '#9ca3af',
+    textAlign: 'center',
   },
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
   dateHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#9b8c86',
+    color: '#9ca3af',
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 10,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   transactionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a2c',
+    borderBottomColor: '#1f1f23',
   },
   transactionInfo: {
     flex: 1,
   },
   transactionDesc: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#ffffff',
     marginBottom: 4,
   },
   transactionTime: {
-    fontSize: 12,
-    color: '#9b8c86',
+    fontSize: 11,
+    color: '#9ca3af',
   },
   transactionAmount: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     marginLeft: 12,
+    minWidth: 80,
+    textAlign: 'right',
   },
 });
