@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: shagofinote-postgres
+    environment:
+      POSTGRES_DB: shagofinote
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shagofinote-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: ShagoFinote/Dockerfile
+    container_name: shagofinote-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=shagofinote;Username=postgres;Password=postgres"
+      Jwt__Secret: "your-super-secret-jwt-key-that-is-at-least-32-characters-long-change-this-in-production"
+      Jwt__Issuer: "ShagoFinote"
+      Jwt__Audience: "ShagoFinoteApp"
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - shagofinote-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: shagofinote-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@shagofinote.app
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - shagofinote-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  shagofinote-network:
+    driver: bridge
