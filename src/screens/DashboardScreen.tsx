@@ -3,7 +3,7 @@
  * Menampilkan ringkasan keuangan dan analytics
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,11 @@ import {
   Pressable,
   RefreshControl,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ModernCard } from '../components/ModernCard';
+import { ModernButton } from '../components/ModernButton';
+import { colors, spacing, typography, borderRadius } from '../theme/spacing';
 import type { FinancialSummary } from '../types/FinancialTransaction';
 import { useFinancialSummary } from '../hooks/useTransactions';
 import { formatCurrency } from '../utils/TransactionUtils';
@@ -31,8 +35,12 @@ export default function DashboardScreen(): React.JSX.Element {
   }, [refresh]);
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a1c" />
+    <LinearGradient
+      colors={colors.gradients.background}
+      start={{x: 0, y: 0}}
+      end={{x: 1, y: 1}}
+      style={[styles.container, { paddingTop: Math.max(insets.top, 0) }]}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -40,142 +48,176 @@ export default function DashboardScreen(): React.JSX.Element {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#c9152a"
-            colors={['#c9152a']}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.subtitle}>Ringkasan keuangan Anda</Text>
-            </View>
-            <Pressable style={styles.refreshButton} onPress={onRefresh}>
-              <Text style={styles.refreshButtonText}>Refresh</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.title}>💰 Keuangan Anda</Text>
+          <Text style={styles.subtitle}>Ringkasan & analytics real-time</Text>
         </View>
 
-        {/* Period Selector */}
+        {/* Period Selector - Modern Pills */}
         <View style={styles.periodSelectorContainer}>
-          <View style={styles.periodSelector}>
-            {(['today', 'week', 'month', 'all'] as const).map(p => (
-              <Pressable
-                key={p}
-                style={[styles.periodButton, period === p && styles.periodButtonActive]}
-                onPress={() => setPeriod(p)}>
-                <Text
-                  style={[
-                    styles.periodButtonText,
-                    period === p && styles.periodButtonTextActive,
-                  ]}>
-                  {p === 'today' ? 'Hari Ini' : p === 'week' ? 'Minggu' : p === 'month' ? 'Bulan' : 'Semua'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {(['today', 'week', 'month', 'all'] as const).map(p => (
+            <Pressable
+              key={p}
+              onPress={() => setPeriod(p)}
+              style={[
+                styles.periodPill,
+                period === p && styles.periodPillActive,
+              ]}>
+              <Text
+                style={[
+                  styles.periodPillText,
+                  period === p && styles.periodPillTextActive,
+                ]}>
+                {p === 'today' ? 'Hari Ini' : p === 'week' ? 'Minggu' : p === 'month' ? 'Bulan' : 'Semua'}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color="#c9152a" size="large" />
+            <ActivityIndicator color={colors.primary} size="large" />
           </View>
         ) : summary ? (
           <>
-            {/* Summary Cards */}
+            {/* Main Summary Card - Large */}
+            <ModernCard variant="elevated" padding={spacing.xl} margin={spacing.lg}>
+              <View style={styles.mainSummaryCard}>
+                <View>
+                  <Text style={styles.mainSummaryLabel}>Net Cashflow</Text>
+                  <Text
+                    style={[
+                      styles.mainSummaryAmount,
+                      {
+                        color:
+                          summary.netCashFlow >= 0
+                            ? colors.income
+                            : colors.expense,
+                      },
+                    ]}>
+                    {formatCurrency(summary.netCashFlow)}
+                  </Text>
+                </View>
+                <View style={styles.mainSummaryBadge}>
+                  <Text style={styles.mainSummaryBadgeText}>
+                    {summary.netCashFlow >= 0 ? '📈' : '📉'}
+                  </Text>
+                </View>
+              </View>
+            </ModernCard>
+
+            {/* Summary Grid - Income & Expense */}
             <View style={styles.summaryGrid}>
-              <SummaryCard
-                title="Total Pemasukan"
-                amount={summary.totalIncome}
-                type="income"
-              />
-              <SummaryCard
-                title="Total Pengeluaran"
-                amount={summary.totalExpense}
-                type="expense"
-              />
-              <SummaryCard
-                title="Net Cashflow"
-                amount={summary.netCashFlow}
-                type="net"
-              />
-              <SummaryMetric
-                title="Total Transaksi"
-                value={summary.transactionCount.toString()}
-              />
+              <ModernCard variant="gradient" padding={spacing.lg}>
+                <View style={styles.summaryCardContent}>
+                  <Text style={styles.summaryCardLabel}>Pemasukan</Text>
+                  <Text style={[styles.summaryCardAmount, {color: colors.income}]}>
+                    {formatCurrency(summary.totalIncome)}
+                  </Text>
+                  <Text style={styles.summaryCardCount}>
+                    {summary.incomeCount} transaksi
+                  </Text>
+                </View>
+              </ModernCard>
+              <ModernCard variant="gradient" padding={spacing.lg}>
+                <View style={styles.summaryCardContent}>
+                  <Text style={styles.summaryCardLabel}>Pengeluaran</Text>
+                  <Text style={[styles.summaryCardAmount, {color: colors.expense}]}>
+                    {formatCurrency(summary.totalExpense)}
+                  </Text>
+                  <Text style={styles.summaryCardCount}>
+                    {summary.expenseCount} transaksi
+                  </Text>
+                </View>
+              </ModernCard>
             </View>
 
-            <CashflowChart data={summary.dailyCashflow} />
+            {/* Chart Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Grafik Keuangan</Text>
+              <ModernCard variant="default" padding={spacing.lg}>
+                <CashflowChart data={summary.dailyCashflow} />
+              </ModernCard>
+            </View>
 
             {/* Top Categories */}
             {summary.topExpenseCategories.length > 0 && (
-              <View style={styles.section}>
+              <View style={styles.sectionContainer}>
                 <Text style={styles.sectionTitle}>Pengeluaran Terbesar</Text>
-                {summary.topExpenseCategories.map((cat, idx) => (
-                  <View key={idx} style={styles.categoryRow}>
-                    <Text style={styles.categoryName}>{formatCategoryLabel(cat.category)}</Text>
-                    <Text style={styles.categoryAmount}>{formatCurrency(cat.amount)}</Text>
-                  </View>
-                ))}
+                <ModernCard variant="default" padding={0}>
+                  {summary.topExpenseCategories.map((cat, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.categoryRow,
+                        idx !== summary.topExpenseCategories.length - 1 &&
+                          styles.categoryRowBorder,
+                      ]}>
+                      <View style={styles.categoryInfo}>
+                        <Text style={styles.categoryEmoji}>
+                          {getCategoryEmoji(cat.category)}
+                        </Text>
+                        <Text style={styles.categoryName}>
+                          {formatCategoryLabel(cat.category)}
+                        </Text>
+                      </View>
+                      <Text style={styles.categoryAmount}>
+                        {formatCurrency(cat.amount)}
+                      </Text>
+                    </View>
+                  ))}
+                </ModernCard>
               </View>
             )}
-
-            {/* Transaction Summary */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Ringkasan Transaksi</Text>
-              <View style={styles.statsGrid}>
-                <StatCard label="Total" value={summary.transactionCount.toString()} />
-                <StatCard label="Pemasukan" value={summary.incomeCount.toString()} />
-                <StatCard label="Pengeluaran" value={summary.expenseCount.toString()} />
-              </View>
-            </View>
           </>
         ) : (
           <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>📊</Text>
             <Text style={styles.emptyText}>Tidak ada data keuangan</Text>
-            <Pressable style={styles.emptyButton} onPress={onRefresh}>
-              <Text style={styles.emptyButtonText}>Refresh</Text>
-            </Pressable>
+            <Text style={styles.emptyDesc}>
+              Mulai catat transaksi untuk melihat ringkasan
+            </Text>
+            <ModernButton
+              label="Refresh"
+              onPress={onRefresh}
+              variant="primary"
+              size="lg"
+              style={{marginTop: spacing.lg}}
+            />
           </View>
         )}
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
-function SummaryCard({
-  title,
-  amount,
-  type,
-}: {
-  title: string;
-  amount: number;
-  type: 'income' | 'expense' | 'net';
-}) {
-  const backgroundColor =
-    type === 'income' ? '#1a4d2e' : type === 'expense' ? '#5a1a1a' : '#2a2a2e';
-  const textColor = type === 'income' ? '#4ade80' : type === 'expense' ? '#f87171' : '#e5e7eb';
-
-  return (
-    <View style={[styles.summaryCard, { backgroundColor }]}>
-      <Text style={styles.summaryCardTitle}>{title}</Text>
-      <Text style={[styles.summaryCardAmount, { color: textColor }]}>
-        {formatCurrency(amount)}
-      </Text>
-    </View>
-  );
+// Helper function for category emoji
+function getCategoryEmoji(category: string): string {
+  const emojis: Record<string, string> = {
+    salary: '💼',
+    bonus: '🎁',
+    freelance: '👨‍💻',
+    food: '🍔',
+    transport: '🚗',
+    shopping: '🛍️',
+    utilities: '💡',
+    entertainment: '🎬',
+    healthcare: '🏥',
+    education: '📚',
+    subscription: '📱',
+    investment: '📈',
+    other: '📌',
+  };
+  return emojis[category] || '💰';
 }
 
-function SummaryMetric({title, value}: {title: string; value: string}) {
-  return (
-    <View style={[styles.summaryCard, styles.metricCard]}>
-      <Text style={styles.summaryCardTitle}>{title}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-    </View>
-  );
-}
+
 
 function CashflowChart({
   data,
@@ -189,21 +231,21 @@ function CashflowChart({
   );
 
   return (
-    <View style={styles.chartSection}>
-      <View style={styles.chartHeader}>
-        <Text style={styles.sectionTitle}>Grafik Keuangan</Text>
-        <Text style={styles.chartHint}>14 hari terakhir</Text>
-      </View>
+    <View>
       <View style={styles.chartContainer}>
         {chartData.map((item, index) => {
-          const incomeHeight = Math.max(4, (item.income / maxValue) * 92);
-          const expenseHeight = Math.max(4, (item.expense / maxValue) * 92);
+          const incomeHeight = Math.max(6, (item.income / maxValue) * 100);
+          const expenseHeight = Math.max(6, (item.expense / maxValue) * 100);
           const date = item.date ? new Date(item.date) : null;
           return (
             <View key={`${item.date}-${index}`} style={styles.chartColumn}>
               <View style={styles.chartBars}>
-                <View style={[styles.chartBar, styles.incomeBar, {height: incomeHeight}]} />
-                <View style={[styles.chartBar, styles.expenseBar, {height: expenseHeight}]} />
+                <View
+                  style={[styles.chartBar, styles.incomeBar, {height: incomeHeight}]}
+                />
+                <View
+                  style={[styles.chartBar, styles.expenseBar, {height: expenseHeight}]}
+                />
               </View>
               <Text style={styles.chartLabel}>
                 {date ? date.getDate().toString() : '-'}
@@ -212,25 +254,16 @@ function CashflowChart({
           );
         })}
       </View>
-      <View style={styles.legendRow}>
+      <View style={styles.chartLegend}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, {backgroundColor: '#22c55e'}]} />
+          <View style={[styles.legendDot, {backgroundColor: colors.income}]} />
           <Text style={styles.legendText}>Pemasukan</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, {backgroundColor: '#ef4444'}]} />
+          <View style={[styles.legendDot, {backgroundColor: colors.expense}]} />
           <Text style={styles.legendText}>Pengeluaran</Text>
         </View>
       </View>
-    </View>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
 }
@@ -257,254 +290,220 @@ function formatCategoryLabel(category: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
   },
   scrollContent: {
-    paddingBottom: 32,
+    paddingBottom: spacing.xxl,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 12,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingTop: spacing.xl,
+    marginBottom: spacing.md,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 4,
+    fontSize: typography.h1,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#9ca3af',
-  },
-  refreshButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#202024',
-    borderWidth: 1,
-    borderColor: '#303036',
-  },
-  refreshButtonText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: typography.label,
+    color: colors.textTertiary,
   },
   periodSelectorContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  periodSelector: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.md,
   },
-  periodButton: {
-    flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#2a2a2c',
-    borderWidth: 1,
-    borderColor: '#2a2a2c',
+  periodPill: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
   },
-  periodButtonActive: {
-    backgroundColor: '#c9152a',
-    borderColor: '#c9152a',
+  periodPillActive: {
+    backgroundColor: colors.primary,
   },
-  periodButtonText: {
-    textAlign: 'center',
-    fontSize: 12,
+  periodPillText: {
+    fontSize: typography.label,
     fontWeight: '600',
-    color: '#9ca3af',
+    color: colors.textSecondary,
   },
-  periodButtonTextActive: {
-    color: '#ffffff',
+  periodPillTextActive: {
+    color: colors.white,
     fontWeight: '700',
   },
   loadingContainer: {
-    paddingVertical: 40,
+    paddingVertical: spacing.xxl,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    gap: 10,
-  },
-  summaryCard: {
-    width: '48.5%',
-    minHeight: 92,
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 9,
-    backgroundColor: '#2a2a2e',
-  },
-  summaryCardTitle: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginBottom: 8,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  summaryCardAmount: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  metricCard: {
-    backgroundColor: '#20242d',
-  },
-  metricValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  chartSection: {
-    marginHorizontal: 16,
-    marginBottom: 20,
-    padding: 14,
-    borderRadius: 9,
-    backgroundColor: '#1b1b1f',
-    borderWidth: 1,
-    borderColor: '#2a2a2c',
-  },
-  chartHeader: {
+  mainSummaryCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
   },
-  chartHint: {
-    fontSize: 11,
-    color: '#9ca3af',
+  mainSummaryLabel: {
+    fontSize: typography.label,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  mainSummaryAmount: {
+    fontSize: typography.h2,
+    fontWeight: '800',
+  },
+  mainSummaryBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mainSummaryBadgeText: {
+    fontSize: 32,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  summaryCardContent: {
+    flex: 1,
+  },
+  summaryCardLabel: {
+    fontSize: typography.label,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  summaryCardAmount: {
+    fontSize: typography.h3,
+    fontWeight: '800',
+    marginBottom: spacing.sm,
+  },
+  summaryCardCount: {
+    fontSize: typography.small,
+    color: colors.textTertiary,
+  },
+  sectionContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  sectionTitle: {
+    fontSize: typography.h4,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
   },
   chartContainer: {
-    height: 120,
+    height: 140,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 5,
-    paddingTop: 8,
+    justifyContent: 'space-around',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
   },
   chartColumn: {
     flex: 1,
     alignItems: 'center',
   },
   chartBars: {
-    height: 90,
+    height: 100,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 2,
+    justifyContent: 'center',
+    gap: spacing.xs,
   },
   chartBar: {
-    width: 4,
-    borderRadius: 2,
+    width: 5,
+    borderRadius: borderRadius.sm,
   },
   incomeBar: {
-    backgroundColor: '#22c55e',
+    backgroundColor: colors.income,
   },
   expenseBar: {
-    backgroundColor: '#ef4444',
+    backgroundColor: colors.expense,
   },
   chartLabel: {
-    marginTop: 6,
-    fontSize: 10,
-    color: '#9ca3af',
+    marginTop: spacing.md,
+    fontSize: typography.tiny,
+    color: colors.textTertiary,
   },
-  legendRow: {
+  chartLegend: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 12,
+    gap: spacing.xl,
+    justifyContent: 'center',
+    marginTop: spacing.lg,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.sm,
   },
   legendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 8,
+    height: 8,
+    borderRadius: borderRadius.full,
   },
   legendText: {
-    fontSize: 11,
-    color: '#d1d5db',
-  },
-  section: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 10,
+    fontSize: typography.small,
+    color: colors.textSecondary,
   },
   categoryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  categoryRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a2c',
+    borderBottomColor: colors.surfaceLight,
+  },
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  categoryEmoji: {
+    fontSize: 24,
   },
   categoryName: {
-    fontSize: 13,
-    color: '#e5e7eb',
+    fontSize: typography.body,
+    fontWeight: '500',
+    color: colors.text,
   },
   categoryAmount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#f87171',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: '#2a2a2c',
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginBottom: 6,
-    fontWeight: '600',
-  },
-  statValue: {
-    fontSize: 16,
+    fontSize: typography.body,
     fontWeight: '700',
-    color: '#ffffff',
+    color: colors.expense,
   },
   emptyContainer: {
-    paddingVertical: 60,
+    paddingVertical: spacing.xxl * 2,
+    paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  emptyEmoji: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
+  },
   emptyText: {
-    fontSize: 14,
-    color: '#9b8c86',
-    marginBottom: 16,
+    fontSize: typography.h4,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
+    textAlign: 'center',
   },
-  emptyButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: '#c9152a',
-    borderRadius: 8,
-  },
-  emptyButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
+  emptyDesc: {
+    fontSize: typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
 });

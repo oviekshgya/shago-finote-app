@@ -13,11 +13,17 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {ModernCard} from '../components/ModernCard';
+import {ModernButton} from '../components/ModernButton';
+import {ModernInput} from '../components/ModernInput';
+import {colors, spacing, typography, borderRadius} from '../theme/spacing';
 import NotificationModule from '../native/NotificationModule';
 import {FinancialStorage} from '../storage/FinancialStorage';
 import {TransactionCaptureService} from '../services/TransactionCaptureService';

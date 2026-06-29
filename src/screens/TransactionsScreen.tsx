@@ -10,11 +10,14 @@ import {
   StyleSheet,
   FlatList,
   StatusBar,
-  TextInput,
-  Pressable,
   ActivityIndicator,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ModernCard } from '../components/ModernCard';
+import { ModernInput } from '../components/ModernInput';
+import { ModernButton } from '../components/ModernButton';
+import { colors, spacing, typography, borderRadius } from '../theme/spacing';
 import { useTransactions } from '../hooks/useTransactions';
 import { formatCurrency, formatTransactionDate, groupTransactionsByDate } from '../utils/TransactionUtils';
 
@@ -46,87 +49,102 @@ export default function TransactionsScreen(): React.JSX.Element {
   }));
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a1c" />
+    <LinearGradient
+      colors={colors.gradients.background}
+      start={{x: 0, y: 0}}
+      end={{x: 1, y: 1}}
+      style={[styles.container, { paddingTop: Math.max(insets.top, 0) }]}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Transaksi</Text>
-        <Text style={styles.subtitle}>{filtered.length} transaksi ditemukan</Text>
+        <Text style={styles.title}>💳 Transaksi</Text>
+        <Text style={styles.subtitle}>{filtered.length} transaksi</Text>
       </View>
 
-      {/* Search & Filter */}
-      <View style={styles.controlsContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Cari transaksi, merchant..."
-          placeholderTextColor="#9ca3af"
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <ModernInput
+          placeholder="Cari merchant, jumlah..."
           value={search}
           onChangeText={setSearch}
+          icon="🔍"
         />
+      </View>
 
-        <View style={styles.filterButtons}>
-          {(['all', 'income', 'expense'] as const).map(type => (
-            <Pressable
-              key={type}
-              style={[styles.filterButton, filterType === type && styles.filterButtonActive]}
-              onPress={() => setFilterType(type)}>
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  filterType === type && styles.filterButtonTextActive,
-                ]}>
-                {type === 'all' ? 'Semua' : type === 'income' ? 'Masuk' : 'Keluar'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      {/* Filter Pills */}
+      <View style={styles.filterContainer}>
+        {(['all', 'income', 'expense'] as const).map(type => (
+          <ModernButton
+            key={type}
+            label={type === 'all' ? 'Semua' : type === 'income' ? '📥 Masuk' : '📤 Keluar'}
+            onPress={() => setFilterType(type)}
+            variant={filterType === type ? 'primary' : 'outline'}
+            size="sm"
+            style={{flex: 1}}
+          />
+        ))}
       </View>
 
       {/* Transactions List */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#c9152a" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : sections.length === 0 ? (
         <View style={styles.emptyContainer}>
+          <Text style={styles.emptyEmoji}>📭</Text>
           <Text style={styles.emptyText}>Tidak ada transaksi</Text>
+          <Text style={styles.emptyDesc}>Mulai catat transaksi untuk melihat riwayat</Text>
         </View>
       ) : (
         <FlatList
           data={sections}
           keyExtractor={item => item.date}
+          scrollEnabled={true}
           renderItem={({ item: section }) => (
             <View key={section.date}>
               <Text style={styles.dateHeader}>{formatDateHeader(section.date)}</Text>
-              {section.items.map(transaction => (
-                <TransactionItem key={transaction.id} transaction={transaction} />
+              {section.items.map((transaction, idx) => (
+                <TransactionItem
+                  key={transaction.id}
+                  transaction={transaction}
+                  isLast={idx === section.items.length - 1}
+                />
               ))}
             </View>
           )}
           contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
-function TransactionItem({ transaction }: any) {
+function TransactionItem({ transaction, isLast }: {transaction: any; isLast: boolean}) {
   const isIncome = transaction.type === 'income';
-  const amountColor = isIncome ? '#4ade80' : '#f87171';
+  const amountColor = isIncome ? colors.income : colors.expense;
+  const emoji = isIncome ? '📥' : '📤';
 
   return (
-    <Pressable style={styles.transactionItem}>
+    <View
+      style={[
+        styles.transactionItemWrapper,
+        !isLast && styles.transactionItemBorder,
+      ]}>
+      <View style={styles.transactionIconCircle}>
+        <Text style={styles.transactionEmoji}>{emoji}</Text>
+      </View>
       <View style={styles.transactionInfo}>
         <Text style={styles.transactionDesc} numberOfLines={1}>
           {transaction.description}
         </Text>
         <Text style={styles.transactionTime}>{formatTransactionDate(transaction.date)}</Text>
       </View>
-      <Text style={[styles.transactionAmount, { color: amountColor }]}>
-        {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
+      <Text style={[styles.transactionAmount, {color: amountColor}]}>
+        {isIncome ? '+' : '-'}{formatCurrency(transaction.amount)}
       </Text>
-    </Pressable>
+    </View>
   );
 }
 
@@ -153,64 +171,32 @@ function formatDateHeader(dateStr: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingTop: spacing.xl,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 4,
+    fontSize: typography.h1,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 12,
-    color: '#9ca3af',
+    fontSize: typography.label,
+    color: colors.textTertiary,
   },
-  controlsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+  searchContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
-  searchInput: {
-    backgroundColor: '#2a2a2c',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    color: '#ffffff',
-    marginBottom: 12,
-    fontSize: 13,
-    borderWidth: 1,
-    borderColor: '#303036',
-  },
-  filterButtons: {
+  filterContainer: {
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
-    gap: 8,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 8,
-    borderRadius: 7,
-    backgroundColor: '#2a2a2c',
-    borderWidth: 1,
-    borderColor: '#2a2a2c',
-  },
-  filterButtonActive: {
-    backgroundColor: '#c9152a',
-    borderColor: '#c9152a',
-  },
-  filterButtonText: {
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9ca3af',
-  },
-  filterButtonTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   centerContainer: {
     flex: 1,
@@ -221,52 +207,82 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyEmoji: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#9ca3af',
+    fontSize: typography.h4,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  emptyDesc: {
+    fontSize: typography.body,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   dateHeader: {
-    fontSize: 11,
+    fontSize: typography.label,
     fontWeight: '700',
-    color: '#9ca3af',
-    marginTop: 16,
-    marginBottom: 10,
+    color: colors.textSecondary,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    marginHorizontal: spacing.lg,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  transactionItem: {
+  transactionItemWrapper: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 11,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.sm,
+  },
+  transactionItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#1f1f23',
+    borderBottomColor: colors.surfaceLight,
+  },
+  transactionIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  transactionEmoji: {
+    fontSize: 24,
   },
   transactionInfo: {
     flex: 1,
   },
   transactionDesc: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '500',
-    color: '#ffffff',
-    marginBottom: 4,
+    color: colors.text,
+    marginBottom: spacing.xs,
   },
   transactionTime: {
-    fontSize: 11,
-    color: '#9ca3af',
+    fontSize: typography.small,
+    color: colors.textTertiary,
   },
   transactionAmount: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '700',
-    marginLeft: 12,
-    minWidth: 80,
+    marginLeft: spacing.md,
+    minWidth: 100,
     textAlign: 'right',
   },
 });
