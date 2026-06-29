@@ -2,6 +2,7 @@
  * React Hook untuk mengelola transaction state
  */
 
+import {DeviceEventEmitter} from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 import type { FinancialTransaction, FinancialSummary } from '../types/FinancialTransaction';
 import { FinancialStorage } from '../storage/FinancialStorage';
@@ -46,10 +47,14 @@ export function useTransactions(): UseTransactionsResult {
 
   useEffect(() => {
     refresh();
+    const subscription = DeviceEventEmitter.addListener('transactionsUpdated', refresh);
     const timer = setInterval(() => {
       refresh();
     }, 15000);
-    return () => clearInterval(timer);
+    return () => {
+      subscription.remove();
+      clearInterval(timer);
+    };
   }, [refresh]);
 
   const addTransaction = useCallback(
@@ -152,10 +157,14 @@ export function useFinancialSummary(period: 'today' | 'week' | 'month' | 'all' =
 
   useEffect(() => {
     refresh();
+    const subscription = DeviceEventEmitter.addListener('transactionsUpdated', refresh);
     const timer = setInterval(() => {
       refresh();
     }, 15000);
-    return () => clearInterval(timer);
+    return () => {
+      subscription.remove();
+      clearInterval(timer);
+    };
   }, [refresh]);
 
   return { summary, loading, error, refresh };

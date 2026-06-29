@@ -1,112 +1,63 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Shago Finote - One-Command Android Debug & Run
+# Shago Finote - one-command Android release install
 # Usage: npm run dev:android
+#
+# This intentionally builds a release APK instead of a debug APK so the app
+# does not need Metro and will not show the red development-server screen.
 
-set -e
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_ID="com.shago.finote"
+JAVA17_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+APK_PATH="$ROOT_DIR/android/app/build/outputs/apk/release/app-release.apk"
 
-echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║          Shago Finote - Android Dev Environment               ║"
-echo "╚════════════════════════════════════════════════════════════════╝"
-echo ""
+cd "$ROOT_DIR"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Check prerequisites
-echo -e "${BLUE}[1/4]${NC} Checking prerequisites..."
-if ! command -v npm &> /dev/null; then
-  echo -e "${RED}Error: npm not found${NC}"
-  exit 1
+if [[ -d "$JAVA17_HOME" ]]; then
+  export JAVA_HOME="$JAVA17_HOME"
+  export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
-if ! command -v adb &> /dev/null; then
-  echo -e "${RED}Error: adb not found. Install Android SDK Platform Tools.${NC}"
+echo "== Shago Finote Android Release Runner =="
+echo
+echo "[1/5] Java"
+java -version
+echo
+
+echo "[2/5] Device"
+adb wait-for-device
+DEVICE="$(adb devices | awk '/\tdevice$/{print $1; exit}')"
+if [[ -z "$DEVICE" ]]; then
+  echo "No authorized Android device found."
+  adb devices
   exit 1
 fi
-
-echo -e "${GREEN}✓ Prerequisites OK${NC}"
-echo ""
-
-# Install dependencies
-echo -e "${BLUE}[2/4]${NC} Installing dependencies..."
-npm install --legacy-peer-deps > /dev/null 2>&1 || {
-  echo -e "${RED}✗ npm install failed${NC}"
-  exit 1
-}
-echo -e "${GREEN}✓ Dependencies installed${NC}"
-echo ""
-
-# Start Metro bundler in background
-echo -e "${BLUE}[3/4]${NC} Starting Metro bundler..."
-npm start > /tmp/metro.log 2>&1 &
-METRO_PID=$!
-sleep 3
-
-if ! kill -0 $METRO_PID 2>/dev/null; then
-  echo -e "${RED}✗ Metro bundler failed to start${NC}"
-  cat /tmp/metro.log
-  exit 1
-fi
-echo -e "${GREEN}✓ Metro bundler running (PID: $METRO_PID)${NC}"
-echo ""
-
-# Wait for device
-echo -e "${BLUE}[4/4]${NC} Waiting for Android device..."
-if ! adb wait-for-device &> /dev/null; then
-  kill $METRO_PID 2>/dev/null || true
-  echo -e "${RED}✗ No Android device found${NC}"
-  echo "Please connect Android device via USB or start emulator."
-  exit 1
-fi
-
-DEVICE=$(adb devices | grep -E '\tdevice$' | head -1 | awk '{print $1}')
-if [ -z "$DEVICE" ]; then
-  kill $METRO_PID 2>/dev/null || true
-  echo -e "${RED}✗ No authorized device found${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}✓ Device connected: $DEVICE${NC}"
-echo ""
-
-echo -e "${BLUE}[BUILD]${NC} Building and installing APK..."
-cd android
-./gradlew installDebug > /tmp/build.log 2>&1 || {
-  echo -e "${RED}✗ Build failed${NC}"
-  tail -50 /tmp/build.log
-  kill $METRO_PID 2>/dev/null || true
-  exit 1
-}
-cd ..
-echo -e "${GREEN}✓ APK installed successfully${NC}"
-echo ""
-
-echo -e "${BLUE}[LAUNCH]${NC} Launching app on device..."
-adb shell am start -n com.shagofintoe/.MainActivity || {
-  echo -e "${RED}✗ Failed to launch app${NC}"
-  kill $METRO_PID 2>/dev/null || true
-  exit 1
-}
-echo -e "${GREEN}✓ App launched${NC}"
-echo ""
-
-echo -e "${GREEN}════════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}✓ Android dev environment ready!${NC}"
-echo ""
 echo "Device: $DEVICE"
-echo "Metro:  http://localhost:8081"
-echo ""
-echo "Debug commands:"
-echo "  adb logcat         - View logs"
-echo "  adb shell pm dump  - App info"
-echo ""
-echo "Press Ctrl+C to stop Metro bundler"
-echo -e "${GREEN}════════════════════════════════════════════════════════════════${NC}"
-echo ""
+echo
 
-# Keep Metro running
-wait $METRO_PID
+echo "[3/5] Build release APK"
+cd "$ROOT_DIR/android"
+./gradlew assembleRelease
+cd "$ROOT_DIR"
+echo
+
+if [[ ! -f "$APK_PATH" ]]; then
+  echo "Release APK not found: $APK_PATH"
+  exit 1
+fi
+
+echo "[4/5] Install release APK"
+if adb install -r "$APK_PATH"; then
+  echo "Installed with data preserved."
+else
+  echo "Install -r failed. Reinstalling clean because signature/data may differ."
+  adb uninstall "$APP_ID" >/dev/null 2>&1 || true
+  adb install "$APK_PATH"
+fi
+echo
+
+echo "[5/5] Launch app"
+adb shell monkey -p "$APP_ID" 1 >/dev/null
+echo "Done. App launched: $APP_ID"
+

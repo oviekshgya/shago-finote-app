@@ -24,7 +24,9 @@ export default function BillsScreen(): React.JSX.Element {
   const [items, setItems] = useState<DueDate[]>([]);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [dueInDays, setDueInDays] = useState('7');
+  const [dueDay, setDueDay] = useState(String(new Date().getDate()));
+  const [dueMonth, setDueMonth] = useState(String(new Date().getMonth() + 1));
+  const [installmentCount, setInstallmentCount] = useState('1');
   const [isRecurring, setIsRecurring] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -39,7 +41,9 @@ export default function BillsScreen(): React.JSX.Element {
 
   const saveBill = async () => {
     const numericAmount = Number(amount.replace(/[^\d]/g, ''));
-    const days = Number(dueInDays.replace(/[^\d]/g, ''));
+    const day = clampNumber(Number(dueDay.replace(/[^\d]/g, '')), 1, 31);
+    const month = clampNumber(Number(dueMonth.replace(/[^\d]/g, '')), 1, 12);
+    const totalInstallments = clampNumber(Number(installmentCount.replace(/[^\d]/g, '')), 1, 60);
     if (!title.trim()) {
       Alert.alert('Nama tagihan wajib diisi');
       return;
@@ -50,30 +54,41 @@ export default function BillsScreen(): React.JSX.Element {
     }
 
     const now = Date.now();
-    const bill: DueDate = {
-      id: `bill-${now}`,
-      title: title.trim(),
-      amount: numericAmount,
-      currency: 'IDR',
-      dueDate: now + Math.max(days || 0, 0) * 24 * 60 * 60 * 1000,
-      category: 'utilities',
-      isRecurring,
-      recurringInterval: isRecurring ? 'monthly' : undefined,
-      createdAt: now,
-      updatedAt: now,
-      isPaid: false,
-      reminderDaysBefore: 1,
-    };
+    const parentId = `bill-${now}`;
+    const bills = Array.from({length: totalInstallments}, (_, index): DueDate => {
+      const dueDate = buildDueDate(day, month, index);
+      return {
+        id: totalInstallments === 1 ? parentId : `${parentId}-${index + 1}`,
+        title: totalInstallments === 1 ? title.trim() : `${title.trim()} (${index + 1}/${totalInstallments})`,
+        amount: numericAmount,
+        currency: 'IDR',
+        dueDate,
+        category: 'utilities',
+        isRecurring,
+        recurringInterval: isRecurring || totalInstallments > 1 ? 'monthly' : undefined,
+        createdAt: now,
+        updatedAt: now,
+        isPaid: false,
+        reminderDaysBefore: 1,
+        installmentIndex: index + 1,
+        installmentTotal: totalInstallments,
+        parentInstallmentId: parentId,
+      };
+    });
 
     setSaving(true);
     try {
-      await FinancialStorage.addDueDate(bill);
+      for (const bill of bills) {
+        await FinancialStorage.addDueDate(bill);
+      }
       setTitle('');
       setAmount('');
-      setDueInDays('7');
+      setDueDay(String(new Date().getDate()));
+      setDueMonth(String(new Date().getMonth() + 1));
+      setInstallmentCount('1');
       setIsRecurring(false);
       await loadItems();
-      Alert.alert('Tagihan tersimpan', 'Tagihan jatuh tempo berhasil ditambahkan.');
+      Alert.alert('Tagihan tersimpan', `${bills.length} tagihan jatuh tempo berhasil ditambahkan.`);
     } catch (error) {
       Alert.alert('Gagal menyimpan', String(error));
     } finally {
@@ -110,17 +125,38 @@ export default function BillsScreen(): React.JSX.Element {
           <TextInput
             style={styles.input}
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={value => setAmount(formatRupiahInput(value))}
             keyboardType="numeric"
-            placeholder="Nominal"
+            placeholder="Rp 250.000"
             placeholderTextColor="#737373"
           />
+          <Text style={styles.inputLabel}>Tanggal jatuh tempo</Text>
+          <View style={styles.dateRow}>
+            <TextInput
+              style={[styles.input, styles.dateInput]}
+              value={dueDay}
+              onChangeText={setDueDay}
+              keyboardType="numeric"
+              placeholder="Tanggal"
+              placeholderTextColor="#737373"
+              maxLength={2}
+            />
+            <TextInput
+              style={[styles.input, styles.dateInput]}
+              value={dueMonth}
+              onChangeText={setDueMonth}
+              keyboardType="numeric"
+              placeholder="Bulan"
+              placeholderTextColor="#737373"
+              maxLength={2}
+            />
+          </View>
           <TextInput
             style={styles.input}
-            value={dueInDays}
-            onChangeText={setDueInDays}
+            value={installmentCount}
+            onChangeText={setInstallmentCount}
             keyboardType="numeric"
-            placeholder="Jatuh tempo dalam berapa hari"
+            placeholder="Jumlah cicilan/tagihan, contoh 12"
             placeholderTextColor="#737373"
           />
           <Pressable
@@ -158,6 +194,9 @@ function BillItem({item, onPaid}: {item: DueDate; onPaid(): void}) {
       <View style={styles.billInfo}>
         <Text style={styles.billTitle}>{item.title}</Text>
         <Text style={styles.billMeta}>{formatTransactionDate(item.dueDate)}</Text>
+        {item.installmentTotal && item.installmentTotal > 1 && (
+          <Text style={styles.billRepeat}>Cicilan {item.installmentIndex}/{item.installmentTotal}</Text>
+        )}
         {item.isRecurring && <Text style={styles.billRepeat}>Berulang bulanan</Text>}
       </View>
       <View style={styles.billRight}>
@@ -173,6 +212,33 @@ function BillItem({item, onPaid}: {item: DueDate; onPaid(): void}) {
       </View>
     </View>
   );
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.min(Math.max(value, min), max);
+}
+
+function buildDueDate(day: number, month: number, monthOffset: number): number {
+  const now = new Date();
+  const year = now.getFullYear();
+  const date = new Date(year, month - 1 + monthOffset, 1, 9, 0, 0, 0);
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, lastDay));
+  if (date.getTime() < now.getTime()) {
+    date.setMonth(date.getMonth() + 1);
+  }
+  return date.getTime();
+}
+
+function formatRupiahInput(value: string): string {
+  const digits = value.replace(/[^\d]/g, '');
+  if (!digits) {
+    return '';
+  }
+  return `Rp ${Number(digits).toLocaleString('id-ID')}`;
 }
 
 const styles = StyleSheet.create({
@@ -221,6 +287,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: '#ffffff',
     fontSize: 14,
+  },
+  inputLabel: {
+    marginBottom: 8,
+    color: '#f3f4f6',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dateInput: {
+    flex: 1,
   },
   toggleRow: {
     minHeight: 46,

@@ -7,12 +7,17 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import org.json.JSONArray
 import org.json.JSONObject
 
 class NotificationModule(
     private val reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
+    init {
+        currentReactContext = reactContext
+    }
+
     override fun getName(): String = "NotificationModule"
 
     @ReactMethod
@@ -135,5 +140,19 @@ class NotificationModule(
             .split(":")
             .mapNotNull { raw -> raw.substringBefore("/").ifBlank { null } }
             .any { enabledPackage -> enabledPackage == packageName }
+    }
+
+    companion object {
+        private var currentReactContext: ReactApplicationContext? = null
+
+        fun emitNotificationCaptured(logJson: String) {
+            val context = currentReactContext ?: return
+            if (!context.hasActiveCatalystInstance()) {
+                return
+            }
+            context
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit("notificationCaptured", logJson)
+        }
     }
 }

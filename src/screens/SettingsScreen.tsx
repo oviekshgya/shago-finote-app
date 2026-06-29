@@ -7,6 +7,8 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
+  DeviceEventEmitter,
+  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -34,6 +36,10 @@ export default function SettingsScreen(): React.JSX.Element {
   const [captureRules, setCaptureRules] = useState<CaptureRule[]>([]);
   const [captureFilter, setCaptureFilter] = useState<CaptureFilter>({captureAll: false, packages: []});
   const [appSearch, setAppSearch] = useState('');
+  const [editingRule, setEditingRule] = useState<CaptureRule | null>(null);
+  const [incomeDraft, setIncomeDraft] = useState('');
+  const [expenseDraft, setExpenseDraft] = useState('');
+  const [addSourceVisible, setAddSourceVisible] = useState(false);
 
   const refresh = useCallback(async () => {
     const [enabled, rawLogs, transactions, bills, appsJson, filterJson, rules] = await Promise.all([
@@ -119,6 +125,14 @@ export default function SettingsScreen(): React.JSX.Element {
     setCaptureFilter(nextFilter);
   };
 
+  const syncPendingNotifications = async () => {
+    const result = await TransactionCaptureService.syncFromNotificationModule(NotificationModule);
+    if (result.captured > 0) {
+      DeviceEventEmitter.emit('transactionsUpdated');
+    }
+    await refresh();
+  };
+
   const enableApp = async (app: InstalledApp) => {
     const nextRules = [
       ...captureRules.filter(rule => rule.packageName !== app.packageName),
@@ -133,6 +147,7 @@ export default function SettingsScreen(): React.JSX.Element {
     await FinancialStorage.saveCaptureRule(nextRules[nextRules.length - 1]);
     await saveNativeFilter(nextRules);
     setCaptureRules(nextRules);
+    await syncPendingNotifications();
   };
 
   const disableApp = async (packageName: string) => {
@@ -160,15 +175,24 @@ export default function SettingsScreen(): React.JSX.Element {
     }
     await saveNativeFilter(nextRules);
     setCaptureRules(nextRules);
+    await syncPendingNotifications();
   };
 
-  const processNow = async () => {
-    const result = await TransactionCaptureService.syncFromNotificationModule(NotificationModule);
-    await refresh();
-    Alert.alert(
-      'Proses notifikasi selesai',
-      `Tercatat: ${result.captured}\nGagal/diabaikan: ${result.failed}\nDuplikat: ${result.duplicates}`,
-    );
+  const openRuleModal = (rule: CaptureRule) => {
+    setEditingRule(rule);
+    setIncomeDraft(rule.incomePrefixes.join(', '));
+    setExpenseDraft(rule.expensePrefixes.join(', '));
+  };
+
+  const saveRuleModal = async () => {
+    if (!editingRule) {
+      return;
+    }
+    await updateRulePrefixes(editingRule.packageName, {
+      incomePrefixes: splitPrefixes(incomeDraft),
+      expensePrefixes: splitPrefixes(expenseDraft),
+    });
+    setEditingRule(null);
   };
 
   const enabledRules = captureRules.filter(rule => rule.enabled);
@@ -212,7 +236,6 @@ export default function SettingsScreen(): React.JSX.Element {
             </View>
           </Card>
           <ActionButton title="Buka Notification Access" subtitle="Aktifkan atau matikan di Android Settings" onPress={openNotificationAccess} />
-          <ActionButton title="Refresh Status" subtitle="Sinkronisasi data terbaru" onPress={refresh} />
         </SettingSection>
 
         {/* Source Notifikasi Section */}
@@ -231,51 +254,19 @@ export default function SettingsScreen(): React.JSX.Element {
             <View style={styles.enabledRulesSection}>
               <Text style={styles.enabledRulesTitle}>App Aktif ({enabledRules.length})</Text>
               {enabledRules.map(rule => (
-                <RuleEditor
+                <ActiveSourceRow
                   key={rule.packageName}
                   rule={rule}
+                  onSetup={() => openRuleModal(rule)}
                   onDisable={() => disableApp(rule.packageName)}
-                  onChangeIncome={value =>
-                    updateRulePrefixes(rule.packageName, {incomePrefixes: splitPrefixes(value)})
-                  }
-                  onChangeExpense={value =>
-                    updateRulePrefixes(rule.packageName, {expensePrefixes: splitPrefixes(value)})
-                  }
                 />
               ))}
             </View>
           )}
 
-          {/* Search & Add New */}
-          <View style={styles.searchSection}>
-            <Text style={styles.searchLabel}>Tambah App Baru</Text>
-            <TextInput
-              style={styles.searchInput}
-              value={appSearch}
-              onChangeText={setAppSearch}
-              placeholder="Cari: BCA, DANA, OVO, GoPay, Gojek..."
-              placeholderTextColor="#737373"
-            />
-            {filteredApps.length > 0 ? (
-              <View style={styles.appList}>
-                {filteredApps.map(app => (
-                  <Pressable key={app.packageName} style={styles.appRow} onPress={() => enableApp(app)}>
-                    <View style={styles.appRowText}>
-                      <Text style={styles.appLabel}>{app.label}</Text>
-                      <Text style={styles.appPackage}>{app.packageName}</Text>
-                    </View>
-                    <Text style={styles.addSourceText}>+</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : appSearch.trim() ? (
-              <Text style={styles.noAppsText}>App tidak ditemukan</Text>
-            ) : (
-              <Text style={styles.noAppsText}>Ketik untuk mencari app keuangan...</Text>
-            )}
-          </View>
-
-          <ActionButton title="Proses Sekarang" subtitle="Parse notifikasi pending menjadi transaksi" onPress={processNow} />
+          <Pressable style={styles.primaryActionButton} onPress={() => setAddSourceVisible(true)}>
+            <Text style={styles.primaryActionText}>Tambah Sumber Notifikasi</Text>
+          </Pressable>
         </SettingSection>
 
         {/* Data Local Section */}
@@ -303,6 +294,101 @@ export default function SettingsScreen(): React.JSX.Element {
           </Card>
         </SettingSection>
       </ScrollView>
+
+      <Modal
+        visible={Boolean(editingRule)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingRule(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Setup Prefix</Text>
+            <Text style={styles.modalSubtitle}>{editingRule?.appLabel}</Text>
+
+            <Text style={styles.inputLabel}>Prefix uang masuk</Text>
+            <TextInput
+              style={styles.ruleInput}
+              value={incomeDraft}
+              onChangeText={setIncomeDraft}
+              placeholder="menerima, diterima, uang masuk"
+              placeholderTextColor="#737373"
+              multiline
+            />
+
+            <Text style={styles.inputLabel}>Prefix uang keluar</Text>
+            <TextInput
+              style={styles.ruleInput}
+              value={expenseDraft}
+              onChangeText={setExpenseDraft}
+              placeholder="pembayaran, bayar, transfer ke"
+              placeholderTextColor="#737373"
+              multiline
+            />
+            <Text style={styles.ruleHint}>Pisahkan prefix dengan koma. Nominal Rp/IDR dibaca otomatis dari notifikasi.</Text>
+
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalCancelButton} onPress={() => setEditingRule(null)}>
+                <Text style={styles.modalCancelText}>Batal</Text>
+              </Pressable>
+              <Pressable style={styles.modalSaveButton} onPress={saveRuleModal}>
+                <Text style={styles.modalSaveText}>Simpan</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={addSourceVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddSourceVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheetTall}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>Tambah Sumber</Text>
+                <Text style={styles.modalSubtitle}>Pilih app bank/e-wallet yang notifikasinya dipantau</Text>
+              </View>
+              <Pressable style={styles.modalCloseButton} onPress={() => setAddSourceVisible(false)}>
+                <Text style={styles.modalCloseText}>x</Text>
+              </Pressable>
+            </View>
+
+            <TextInput
+              style={styles.searchInput}
+              value={appSearch}
+              onChangeText={setAppSearch}
+              placeholder="Cari: BCA, DANA, OVO, GoPay, Gojek..."
+              placeholderTextColor="#737373"
+              autoFocus
+            />
+
+            <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
+              {filteredApps.length > 0 ? (
+                filteredApps.map(app => (
+                  <Pressable
+                    key={app.packageName}
+                    style={styles.appRow}
+                    onPress={async () => {
+                      await enableApp(app);
+                      setAppSearch('');
+                      setAddSourceVisible(false);
+                    }}>
+                    <View style={styles.appRowText}>
+                      <Text style={styles.appLabel}>{app.label}</Text>
+                      <Text style={styles.appPackage}>{app.packageName}</Text>
+                    </View>
+                    <Text style={styles.addSourceText}>Pilih</Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.noAppsText}>App tidak ditemukan</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -329,47 +415,32 @@ function ActionButton({
   );
 }
 
-function RuleEditor({
+function ActiveSourceRow({
   rule,
+  onSetup,
   onDisable,
-  onChangeIncome,
-  onChangeExpense,
 }: {
   rule: CaptureRule;
+  onSetup(): void;
   onDisable(): void;
-  onChangeIncome(value: string): void;
-  onChangeExpense(value: string): void;
 }) {
   return (
-    <View style={styles.ruleCard}>
-      <View style={styles.ruleHeader}>
-        <View style={styles.actionTextWrap}>
-          <Text style={styles.ruleTitle}>{rule.appLabel}</Text>
-          <Text style={styles.appPackage}>{rule.packageName}</Text>
-        </View>
+    <View style={styles.activeSourceRow}>
+      <View style={styles.actionTextWrap}>
+        <Text style={styles.ruleTitle}>{rule.appLabel}</Text>
+        <Text style={styles.appPackage}>{rule.packageName}</Text>
+        <Text style={styles.prefixSummary}>
+          Masuk {rule.incomePrefixes.length} prefix | Keluar {rule.expensePrefixes.length} prefix
+        </Text>
+      </View>
+      <View style={styles.sourceActions}>
+        <Pressable style={styles.setupButton} onPress={onSetup}>
+          <Text style={styles.setupButtonText}>Atur</Text>
+        </Pressable>
         <Pressable style={styles.disableButton} onPress={onDisable}>
-          <Text style={styles.disableButtonText}>Off</Text>
+          <Text style={styles.disableButtonText}>Matikan</Text>
         </Pressable>
       </View>
-
-      <Text style={styles.inputLabel}>Prefix uang masuk</Text>
-      <TextInput
-        style={styles.ruleInput}
-        defaultValue={rule.incomePrefixes.join(', ')}
-        onEndEditing={event => onChangeIncome(event.nativeEvent.text)}
-        placeholder="Contoh: menerima, diterima, top up berhasil, uang masuk"
-        placeholderTextColor="#737373"
-      />
-
-      <Text style={styles.inputLabel}>Prefix uang keluar</Text>
-      <TextInput
-        style={styles.ruleInput}
-        defaultValue={rule.expensePrefixes.join(', ')}
-        onEndEditing={event => onChangeExpense(event.nativeEvent.text)}
-        placeholder="Contoh: pembayaran, bayar, transaksi berhasil, transfer ke"
-        placeholderTextColor="#737373"
-      />
-      <Text style={styles.ruleHint}>Pisahkan beberapa prefix dengan koma. Nominal Rp/IDR akan dibaca otomatis.</Text>
     </View>
   );
 }
@@ -512,6 +583,20 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
   },
+  primaryActionButton: {
+    minHeight: 48,
+    marginTop: 10,
+    marginBottom: 10,
+    borderRadius: 8,
+    backgroundColor: '#c9152a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryActionText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   appList: {
     marginBottom: 12,
   },
@@ -586,25 +671,45 @@ const styles = StyleSheet.create({
   dangerText: {
     color: '#f87171',
   },
-  ruleCard: {
+  activeSourceRow: {
+    minHeight: 68,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 8,
     borderRadius: 8,
     backgroundColor: '#202024',
     borderWidth: 1,
     borderColor: '#334155',
-  },
-  ruleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 10,
   },
   ruleTitle: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 2,
+  },
+  prefixSummary: {
+    marginTop: 4,
+    color: '#86efac',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sourceActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  setupButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#1d4ed8',
+  },
+  setupButtonText: {
+    color: '#dbeafe',
+    fontSize: 11,
+    fontWeight: '800',
   },
   disableButton: {
     paddingHorizontal: 10,
@@ -625,7 +730,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   ruleInput: {
-    minHeight: 40,
+    minHeight: 52,
     marginBottom: 10,
     borderRadius: 6,
     backgroundColor: '#1a1a1e',
@@ -634,6 +739,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     color: '#ffffff',
     fontSize: 12,
+    textAlignVertical: 'top',
   },
   ruleHint: {
     color: '#9ca3af',
@@ -669,5 +775,95 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     fontSize: 13,
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    padding: 18,
+    paddingBottom: 28,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: '#151518',
+    borderWidth: 1,
+    borderColor: '#2a2a2c',
+  },
+  modalSheetTall: {
+    maxHeight: '82%',
+    padding: 18,
+    paddingBottom: 24,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: '#151518',
+    borderWidth: 1,
+    borderColor: '#2a2a2c',
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalHeaderText: {
+    flex: 1,
+  },
+  modalCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#27272a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    color: '#ffffff',
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '700',
+  },
+  modalList: {
+    maxHeight: 420,
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    marginTop: 4,
+    marginBottom: 16,
+    color: '#9ca3af',
+    fontSize: 13,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  modalCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 8,
+    backgroundColor: '#27272a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    color: '#e5e7eb',
+    fontWeight: '800',
+  },
+  modalSaveButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 8,
+    backgroundColor: '#c9152a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSaveText: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
 });

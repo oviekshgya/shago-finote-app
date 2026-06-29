@@ -216,7 +216,19 @@ export class TransactionCaptureService {
         return { captured: 0, failed: 0, duplicates: 0 };
       }
 
-      const { results, stats } = await this.captureNotifications(notifications);
+      const transactions = await FinancialStorage.getAllTransactions();
+      const completedNotificationIds = new Set(
+        transactions.map(transaction => transaction.rawNotificationId).filter(Boolean),
+      );
+      const pendingNotifications = notifications.filter(
+        notification => !completedNotificationIds.has(notification.id),
+      );
+
+      if (pendingNotifications.length === 0) {
+        return { captured: 0, failed: 0, duplicates: 0 };
+      }
+
+      const { stats } = await this.captureNotifications(pendingNotifications);
 
       return {
         captured: stats.successfulParse,

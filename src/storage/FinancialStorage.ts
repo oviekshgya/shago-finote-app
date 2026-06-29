@@ -201,7 +201,12 @@ export class FinancialStorage {
 
   static async addRawNotification(notification: NotificationRawLog): Promise<void> {
     const notifications = await this.getAllRawNotifications();
-    notifications.push(notification);
+    const existingIndex = notifications.findIndex(item => item.id === notification.id);
+    if (existingIndex >= 0) {
+      notifications[existingIndex] = notification;
+    } else {
+      notifications.push(notification);
+    }
     // Keep max 1000 raw notifications
     if (notifications.length > 1000) {
       notifications.splice(0, notifications.length - 1000);

@@ -99,6 +99,11 @@ export type DueDate = {
   // Reminder
   reminderDaysBefore?: number; // Ingatkan N hari sebelum due date
   isReminderSent?: boolean;
+
+  // Installment / cicilan
+  installmentIndex?: number;
+  installmentTotal?: number;
+  parentInstallmentId?: string;
 };
 
 /**

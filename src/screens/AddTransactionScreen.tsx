@@ -44,6 +44,10 @@ export default function AddTransactionScreen(): React.JSX.Element {
   const [category, setCategory] = useState<TransactionCategory>('other');
   const [saving, setSaving] = useState(false);
 
+  const handleAmountChange = (value: string) => {
+    setAmount(formatRupiahInput(value));
+  };
+
   const saveTransaction = async () => {
     const numericAmount = Number(amount.replace(/[^\d]/g, ''));
     if (!numericAmount || numericAmount <= 0) {
@@ -117,9 +121,9 @@ export default function AddTransactionScreen(): React.JSX.Element {
           <TextInput
             style={styles.input}
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={handleAmountChange}
             keyboardType="numeric"
-            placeholder="Contoh: 50000"
+            placeholder="Rp 50.000"
             placeholderTextColor="#737373"
           />
         </Field>
@@ -176,6 +180,14 @@ function Field({label, children}: {label: string; children: React.ReactNode}) {
       {children}
     </View>
   );
+}
+
+function formatRupiahInput(value: string): string {
+  const digits = value.replace(/[^\d]/g, '');
+  if (!digits) {
+    return '';
+  }
+  return `Rp ${Number(digits).toLocaleString('id-ID')}`;
 }
 
 const styles = StyleSheet.create({

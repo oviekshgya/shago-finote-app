@@ -47,8 +47,15 @@ export default function DashboardScreen(): React.JSX.Element {
         showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Dashboard</Text>
-          <Text style={styles.subtitle}>Ringkasan keuangan Anda</Text>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.title}>Dashboard</Text>
+              <Text style={styles.subtitle}>Ringkasan keuangan Anda</Text>
+            </View>
+            <Pressable style={styles.refreshButton} onPress={onRefresh}>
+              <Text style={styles.refreshButtonText}>Refresh</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Period Selector */}
@@ -260,6 +267,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingBottom: 12,
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
@@ -269,6 +282,19 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     color: '#9ca3af',
+  },
+  refreshButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#202024',
+    borderWidth: 1,
+    borderColor: '#303036',
+  },
+  refreshButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   periodSelectorContainer: {
     paddingHorizontal: 16,

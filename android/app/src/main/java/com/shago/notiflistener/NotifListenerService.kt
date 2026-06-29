@@ -44,6 +44,7 @@ class NotifListenerService : NotificationListenerService() {
             }
 
             NotificationStore.add(applicationContext, log)
+            NotificationModule.emitNotificationCaptured(log.toString())
             Log.d(TAG, "Stored notification from ${sbn.packageName}")
             if (webhookEnabled && webhookConfig != null) {
                 Thread {
