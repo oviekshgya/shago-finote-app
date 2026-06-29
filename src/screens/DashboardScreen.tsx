@@ -43,29 +43,32 @@ export default function DashboardScreen(): React.JSX.Element {
             tintColor="#c9152a"
             colors={['#c9152a']}
           />
-        }>
+        }
+        showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Dashboard Keuangan</Text>
-          <Text style={styles.subtitle}>Ringkasan aktivitas finansial Anda</Text>
+          <Text style={styles.title}>Dashboard</Text>
+          <Text style={styles.subtitle}>Ringkasan keuangan Anda</Text>
         </View>
 
         {/* Period Selector */}
-        <View style={styles.periodSelector}>
-          {(['today', 'week', 'month', 'all'] as const).map(p => (
-            <Pressable
-              key={p}
-              style={[styles.periodButton, period === p && styles.periodButtonActive]}
-              onPress={() => setPeriod(p)}>
-              <Text
-                style={[
-                  styles.periodButtonText,
-                  period === p && styles.periodButtonTextActive,
-                ]}>
-                {p === 'today' ? 'Hari Ini' : p === 'week' ? 'Minggu' : p === 'month' ? 'Bulan' : 'Semua'}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.periodSelectorContainer}>
+          <View style={styles.periodSelector}>
+            {(['today', 'week', 'month', 'all'] as const).map(p => (
+              <Pressable
+                key={p}
+                style={[styles.periodButton, period === p && styles.periodButtonActive]}
+                onPress={() => setPeriod(p)}>
+                <Text
+                  style={[
+                    styles.periodButtonText,
+                    period === p && styles.periodButtonTextActive,
+                  ]}>
+                  {p === 'today' ? 'Hari Ini' : p === 'week' ? 'Minggu' : p === 'month' ? 'Bulan' : 'Semua'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {loading ? (
@@ -255,6 +258,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,
+    paddingBottom: 12,
   },
   title: {
     fontSize: 24,
@@ -263,23 +267,25 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#9b8c86',
+    fontSize: 13,
+    color: '#9ca3af',
+  },
+  periodSelectorContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
   },
   periodSelector: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 16,
     gap: 8,
   },
   periodButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: '#2a2a2c',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: '#2a2a2c',
   },
   periodButtonActive: {
     backgroundColor: '#c9152a',
@@ -289,10 +295,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '600',
-    color: '#9b8c86',
+    color: '#9ca3af',
   },
   periodButtonTextActive: {
     color: '#ffffff',
+    fontWeight: '700',
   },
   loadingContainer: {
     paddingVertical: 40,
@@ -303,25 +310,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 20,
     gap: 10,
   },
   summaryCard: {
     width: '48.5%',
-    minHeight: 96,
+    minHeight: 92,
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: 9,
     backgroundColor: '#2a2a2e',
   },
   summaryCardTitle: {
-    fontSize: 12,
-    color: '#9b8c86',
+    fontSize: 11,
+    color: '#9ca3af',
     marginBottom: 8,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   summaryCardAmount: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#ffffff',
   },
@@ -329,15 +338,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#20242d',
   },
   metricValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: '#ffffff',
   },
   chartSection: {
     marginHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 20,
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 9,
     backgroundColor: '#1b1b1f',
     borderWidth: 1,
     borderColor: '#2a2a2c',
@@ -346,17 +355,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   chartHint: {
     fontSize: 11,
-    color: '#9b8c86',
+    color: '#9ca3af',
   },
   chartContainer: {
-    height: 128,
+    height: 120,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 6,
+    gap: 5,
     paddingTop: 8,
   },
   chartColumn: {
@@ -364,14 +373,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chartBars: {
-    height: 100,
+    height: 90,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 2,
   },
   chartBar: {
-    width: 5,
-    borderRadius: 3,
+    width: 4,
+    borderRadius: 2,
   },
   incomeBar: {
     backgroundColor: '#22c55e',
@@ -382,12 +391,12 @@ const styles = StyleSheet.create({
   chartLabel: {
     marginTop: 6,
     fontSize: 10,
-    color: '#9b8c86',
+    color: '#9ca3af',
   },
   legendRow: {
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 10,
+    gap: 16,
+    marginTop: 12,
   },
   legendItem: {
     flexDirection: 'row',
@@ -395,9 +404,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   legendText: {
     fontSize: 11,
@@ -405,18 +414,18 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   categoryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#2a2a2c',
   },
@@ -435,16 +444,17 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     borderRadius: 8,
     backgroundColor: '#2a2a2c',
     alignItems: 'center',
   },
   statLabel: {
     fontSize: 11,
-    color: '#9b8c86',
-    marginBottom: 4,
+    color: '#9ca3af',
+    marginBottom: 6,
+    fontWeight: '600',
   },
   statValue: {
     fontSize: 16,

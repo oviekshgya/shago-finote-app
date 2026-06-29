@@ -5,6 +5,7 @@
   "scripts": {
     "android": "react-native run-android",
     "android:debug": "bash scripts/run-android-debug.sh",
+    "dev:android": "bash scripts/dev-android.sh",
     "start": "react-native start",
     "lint": "eslint .",
     "test": "jest"
