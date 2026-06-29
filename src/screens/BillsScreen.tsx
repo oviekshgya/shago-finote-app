@@ -14,7 +14,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {ModernCard} from '../components/ModernCard';
+import {ModernButton} from '../components/ModernButton';
+import {ModernInput} from '../components/ModernInput';
+import {colors, spacing, typography, borderRadius} from '../theme/spacing';
 import {FinancialStorage} from '../storage/FinancialStorage';
 import type {DueDate} from '../types/FinancialTransaction';
 import {formatCurrency, formatTransactionDate} from '../utils/TransactionUtils';
@@ -105,8 +110,12 @@ export default function BillsScreen(): React.JSX.Element {
   };
 
   return (
-    <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
-      <StatusBar barStyle="light-content" backgroundColor="#111113" />
+    <LinearGradient
+      colors={colors.gradients.background}
+      start={{x: 0, y: 0}}
+      end={{x: 1, y: 1}}
+      style={[styles.container, { paddingTop: Math.max(insets.top, 0) }]}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>Tagihan</Text>
@@ -180,7 +189,7 @@ export default function BillsScreen(): React.JSX.Element {
           items.map(item => <BillItem key={item.id} item={item} onPaid={() => markPaid(item)} />)
         )}
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -244,172 +253,171 @@ function formatRupiahInput(value: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
   },
   content: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   header: {
-    marginBottom: 18,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: typography.h1,
+    fontWeight: '800',
+    color: colors.text,
   },
   subtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#9ca3af',
+    marginTop: spacing.sm,
+    fontSize: typography.label,
+    color: colors.textSecondary,
   },
   formCard: {
-    padding: 14,
-    marginBottom: 20,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.surfaceLight,
   },
   sectionTitle: {
-    marginBottom: 12,
-    fontSize: 15,
+    marginBottom: spacing.md,
+    fontSize: typography.body,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.text,
   },
   input: {
-    minHeight: 46,
-    marginBottom: 10,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    minHeight: 48,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: '#303036',
-    paddingHorizontal: 12,
-    color: '#ffffff',
-    fontSize: 14,
+    borderColor: colors.surfaceLight,
+    paddingHorizontal: spacing.md,
+    color: colors.text,
+    fontSize: typography.body,
   },
   inputLabel: {
-    marginBottom: 8,
-    color: '#f3f4f6',
-    fontSize: 12,
+    marginBottom: spacing.sm,
+    color: colors.text,
+    fontSize: typography.label,
     fontWeight: '800',
   },
   dateRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: spacing.md,
   },
   dateInput: {
     flex: 1,
   },
   toggleRow: {
-    minHeight: 46,
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#242428',
+    minHeight: 48,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.surfaceLight,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   toggleRowActive: {
-    borderColor: '#22c55e',
-    backgroundColor: '#1f3d2a',
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '20',
   },
   toggleText: {
-    color: '#f3f4f6',
-    fontSize: 13,
+    color: colors.text,
+    fontSize: typography.body,
     fontWeight: '600',
   },
   toggleValue: {
-    color: '#86efac',
-    fontSize: 12,
+    color: colors.primary,
+    fontSize: typography.label,
     fontWeight: '800',
   },
   saveButton: {
-    minHeight: 46,
-    borderRadius: 8,
-    backgroundColor: '#c9152a',
+    minHeight: 56,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontWeight: '800',
   },
   emptyCard: {
-    padding: 18,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.surfaceLight,
   },
   emptyTitle: {
-    color: '#ffffff',
+    color: colors.text,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: spacing.sm,
   },
   emptyText: {
-    color: '#9ca3af',
-    fontSize: 13,
+    color: colors.textSecondary,
+    fontSize: typography.body,
   },
   billItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    gap: spacing.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.surfaceLight,
   },
   billInfo: {
     flex: 1,
   },
   billTitle: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: colors.text,
+    fontSize: typography.body,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   billMeta: {
-    color: '#9ca3af',
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: typography.small,
   },
   billRepeat: {
-    color: '#86efac',
-    fontSize: 11,
-    marginTop: 4,
+    color: colors.primary,
+    fontSize: typography.tiny,
+    marginTop: spacing.xs,
   },
   billRight: {
     alignItems: 'flex-end',
   },
   billAmount: {
-    color: '#ffffff',
-    fontSize: 13,
+    color: colors.text,
+    fontSize: typography.body,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   billStatus: {
-    color: '#9ca3af',
-    fontSize: 11,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: spacing.md,
   },
   billStatusOverdue: {
-    color: '#f87171',
+    color: colors.expense,
   },
   paidButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 7,
-    backgroundColor: '#14532d',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.income,
   },
   paidButtonText: {
-    color: '#86efac',
-    fontSize: 11,
+    color: colors.white,
+    fontSize: typography.tiny,
     fontWeight: '800',
   },
 });

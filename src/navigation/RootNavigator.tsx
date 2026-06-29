@@ -8,6 +8,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography, borderRadius } from '../theme/spacing';
 
 // Import screens
 import DashboardScreen from '../screens/DashboardScreen';
@@ -180,19 +181,20 @@ export default function RootNavigator() {
         screenOptions={({route}) => ({
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: '#1a1a1c',
-            borderTopColor: '#2a2a2c',
+            backgroundColor: colors.background,
+            borderTopColor: colors.surfaceLight,
             borderTopWidth: 1,
-            height: 60,
-            paddingBottom: 8,
+            height: 70,
+            paddingBottom: spacing.md,
+            paddingTop: spacing.sm,
           },
           tabBarLabelStyle: {
-            fontSize: 11,
-            fontWeight: '500',
-            marginBottom: 4,
+            fontSize: typography.tiny,
+            fontWeight: '600',
+            marginBottom: spacing.xs,
           },
-          tabBarActiveTintColor: '#c9152a',
-          tabBarInactiveTintColor: '#8a8a8e',
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textTertiary,
           tabBarShowLabel: true,
         })}>
         <Tab.Screen
@@ -259,14 +261,15 @@ export default function RootNavigator() {
 
 const styles = StyleSheet.create({
   tabIcon: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: borderRadius.md,
   },
   tabIconActive: {
-    backgroundColor: '#2a1b20',
-    borderRadius: 16,
+    backgroundColor: colors.primary + '20',
+    borderRadius: borderRadius.md,
   },
   tabIconText: {
     fontSize: 20,
@@ -277,23 +280,23 @@ const styles = StyleSheet.create({
   addButtonCircle: {
     width: 56,
     height: 56,
-    borderRadius: 28,
-    backgroundColor: '#c9152a',
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-    shadowColor: '#000',
+    marginBottom: spacing.md,
+    shadowColor: colors.black,
     shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   addButtonCircleActive: {
-    backgroundColor: '#e01e3e',
+    backgroundColor: colors.primaryDark,
   },
   addButtonText: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: colors.white,
   },
 });
