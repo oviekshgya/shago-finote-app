@@ -214,13 +214,17 @@ export default function SettingsScreen(): React.JSX.Element {
     .slice(0, 20);
 
   return (
-    <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
-      <StatusBar barStyle="light-content" backgroundColor="#111113" />
+    <LinearGradient
+      colors={colors.gradients.background}
+      start={{x: 0, y: 0}}
+      end={{x: 1, y: 1}}
+      style={[styles.container, {paddingTop: Math.max(insets.top, 0)}]}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScrollView contentContainerStyle={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Pengaturan</Text>
-          <Text style={styles.subtitle}>Konfigurasi listener, source notifikasi, dan data lokal</Text>
+          <Text style={styles.title}>⚙️ Pengaturan</Text>
+          <Text style={styles.subtitle}>Listener, source notifikasi, dan data lokal</Text>
         </View>
 
         {/* Status Section */}
@@ -395,7 +399,7 @@ export default function SettingsScreen(): React.JSX.Element {
           </View>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -491,24 +495,24 @@ function isLikelyFinanceApp(app: InstalledApp): boolean {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
   },
   content: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   header: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
+    paddingTop: spacing.lg,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 4,
+    fontSize: typography.h1,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#9ca3af',
+    fontSize: typography.label,
+    color: colors.textSecondary,
   },
   statusContent: {
     flexDirection: 'row',
@@ -519,53 +523,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusLabel: {
-    fontSize: 12,
-    color: '#9ca3af',
+    fontSize: typography.label,
+    color: colors.textSecondary,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   statusValue: {
-    fontSize: 18,
+    fontSize: typography.h4,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: spacing.md,
+    color: colors.text,
   },
   statusDesc: {
-    fontSize: 12,
-    color: '#d1d5db',
+    fontSize: typography.body,
+    color: colors.textSecondary,
     lineHeight: 17,
   },
   statusIndicator: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginLeft: 12,
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.full,
+    marginLeft: spacing.md,
   },
   indicatorOn: {
-    backgroundColor: '#14532d',
+    backgroundColor: colors.income,
   },
   indicatorOff: {
-    backgroundColor: '#4b1d1d',
+    backgroundColor: colors.expense,
   },
   infoText: {
-    color: '#d1d5db',
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: typography.body,
     lineHeight: 18,
-    marginBottom: 10,
+    marginBottom: spacing.md,
   },
   modeLabel: {
-    color: '#86efac',
-    fontSize: 12,
+    color: colors.primary,
+    fontSize: typography.label,
     fontWeight: '800',
   },
   enabledRulesSection: {
-    marginTop: 10,
-    marginBottom: 10,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
   enabledRulesTitle: {
-    fontSize: 12,
+    fontSize: typography.label,
     fontWeight: '800',
-    color: '#9ca3af',
-    marginBottom: 8,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
     textTransform: 'uppercase',
   },
   searchSection: {
