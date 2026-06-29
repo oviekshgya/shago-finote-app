@@ -3,7 +3,7 @@ module.exports = {
     android: {
       sourceDir: './android',
       appName: 'app',
-      packageName: 'com.shago.notiflistener',
+      packageName: 'com.shago.finote',
     },
   },
 };

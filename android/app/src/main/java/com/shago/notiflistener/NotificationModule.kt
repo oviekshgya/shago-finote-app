@@ -1,4 +1,4 @@
-package com.shago.notiflistener
+package com.shago.finote
 
 import android.content.Intent
 import android.content.pm.PackageManager

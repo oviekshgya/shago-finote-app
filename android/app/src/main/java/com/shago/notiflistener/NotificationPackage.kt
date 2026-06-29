@@ -1,4 +1,4 @@
-package com.shago.notiflistener
+package com.shago.finote
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

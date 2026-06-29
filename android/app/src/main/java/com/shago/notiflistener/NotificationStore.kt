@@ -1,4 +1,4 @@
-package com.shago.notiflistener
+package com.shago.finote
 
 import android.content.Context
 import org.json.JSONArray

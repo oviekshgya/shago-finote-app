@@ -12,11 +12,11 @@ def enableProguardInReleaseBuilds = false
 def jscFlavor = "org.webkit:android-jsc:+"
 
 android {
-    namespace "com.shago.notiflistener"
+    namespace "com.shago.finote"
     compileSdk rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        applicationId "com.shago.notiflistener"
+        applicationId "com.shago.finote"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

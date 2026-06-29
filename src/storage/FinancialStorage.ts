@@ -13,6 +13,7 @@ import type {
   FinancialSummary,
   TransactionCategory,
 } from '../types/FinancialTransaction';
+import type {CaptureRule} from '../types/CaptureRule';
 
 /**
  * Key constants untuk AsyncStorage
@@ -25,6 +26,7 @@ const STORAGE_KEYS = {
   PARSER_CACHE: 'finote:parser_cache',
   SYNC_METADATA: 'finote:sync_metadata',
   APP_CONFIG: 'finote:app_config',
+  CAPTURE_RULES: 'finote:capture_rules',
 } as const;
 
 /**
@@ -272,6 +274,34 @@ export class FinancialStorage {
   }
 
   /**
+   * CAPTURE RULES
+   */
+
+  static async getCaptureRules(): Promise<CaptureRule[]> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.CAPTURE_RULES);
+    return data ? JSON.parse(data) : [];
+  }
+
+  static async saveCaptureRule(rule: CaptureRule): Promise<void> {
+    const rules = await this.getCaptureRules();
+    const index = rules.findIndex(item => item.packageName === rule.packageName);
+    if (index >= 0) {
+      rules[index] = rule;
+    } else {
+      rules.push(rule);
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.CAPTURE_RULES, JSON.stringify(rules));
+  }
+
+  static async removeCaptureRule(packageName: string): Promise<void> {
+    const rules = await this.getCaptureRules();
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.CAPTURE_RULES,
+      JSON.stringify(rules.filter(rule => rule.packageName !== packageName)),
+    );
+  }
+
+  /**
    * ANALYTICS & SUMMARY
    */
 
@@ -355,6 +385,25 @@ export class FinancialStorage {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
+    const dailyMap: Record<string, {income: number; expense: number; net: number}> = {};
+    filtered.forEach(t => {
+      const key = new Date(t.date).toISOString().split('T')[0];
+      if (!dailyMap[key]) {
+        dailyMap[key] = {income: 0, expense: 0, net: 0};
+      }
+      if (t.type === 'income') {
+        dailyMap[key].income += t.amount;
+      } else if (t.type === 'expense') {
+        dailyMap[key].expense += t.amount;
+      }
+      dailyMap[key].net = dailyMap[key].income - dailyMap[key].expense;
+    });
+
+    summary.dailyCashflow = Object.entries(dailyMap)
+      .map(([date, value]) => ({date, ...value}))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-14);
+
     return summary;
   }
 
@@ -412,6 +461,7 @@ export class FinancialStorage {
       AsyncStorage.removeItem(STORAGE_KEYS.PARSER_CACHE),
       AsyncStorage.removeItem(STORAGE_KEYS.SYNC_METADATA),
       AsyncStorage.removeItem(STORAGE_KEYS.APP_CONFIG),
+      AsyncStorage.removeItem(STORAGE_KEYS.CAPTURE_RULES),
     ]);
   }
 }
