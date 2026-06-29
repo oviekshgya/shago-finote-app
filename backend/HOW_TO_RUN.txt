@@ -1,0 +1,306 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║          SHAGO FINOTE BACKEND - CARA MENJALANKAN (How to Run)              ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+## QUICK START - PILIH SALAH SATU CARA
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CARA 1: DOCKER (PALING MUDAH & RECOMMENDED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Buka terminal/command prompt
+
+2. Masuk ke folder backend:
+   cd backend
+
+3. Jalankan satu command:
+   docker-compose up -d
+
+4. Done! Backend sudah running:
+   ✓ API: http://localhost:5000
+   ✓ Swagger UI: http://localhost:5000/swagger
+   ✓ Database (PgAdmin): http://localhost:5050
+
+5. Untuk stop:
+   docker-compose down
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CARA 2: LOKAL .NET (Jika tidak ada Docker)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Prerequisites:
+  - .NET 8 SDK installed (download: https://dotnet.microsoft.com/download)
+  - PostgreSQL 12+ running locally
+
+Steps:
+
+1. Masuk ke folder project:
+   cd backend/ShagoFinote
+
+2. Restore packages:
+   dotnet restore
+
+3. Build:
+   dotnet build
+
+4. Jalankan:
+   dotnet run
+
+5. API ready: http://localhost:5000
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CARA 3: MENGGUNAKAN SCRIPT OTOMATIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Linux/Mac:
+  cd backend
+  ./run.sh
+
+Windows:
+  cd backend
+  run.bat
+
+Akan muncul menu interaktif untuk memilih cara menjalankan.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERIFIKASI BACKEND SUDAH RUNNING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pilih salah satu:
+
+1. Buka browser:
+   http://localhost:5000/swagger
+
+2. Cek status:
+   docker-compose ps
+
+3. Test API:
+   curl http://localhost:5000/health
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TEST API - FIRST STEPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. REGISTER USER
+
+   URL: http://localhost:5000/api/auth/register
+   Method: POST
+   Body:
+   {
+     "email": "test@example.com",
+     "username": "testuser",
+     "password": "SecurePass123!",
+     "fullName": "Test User"
+   }
+
+   Atau via cURL:
+   curl -X POST http://localhost:5000/api/auth/register \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "test@example.com",
+       "username": "testuser",
+       "password": "SecurePass123!",
+       "fullName": "Test User"
+     }'
+
+2. LOGIN & DAPATKAN TOKEN
+
+   URL: http://localhost:5000/api/auth/login
+   Method: POST
+   Body:
+   {
+     "email": "test@example.com",
+     "password": "SecurePass123!"
+   }
+
+   Response akan berisi token (copy untuk langkah berikutnya)
+
+3. CREATE TRANSACTION
+
+   URL: http://localhost:5000/api/transactions
+   Method: POST
+   Headers: Authorization: Bearer <COPY_TOKEN_DARI_LANGKAH_2>
+   Body:
+   {
+     "amount": 50000,
+     "type": 2,
+     "description": "Lunch",
+     "categoryId": 1,
+     "transactionDate": "2024-06-29T12:00:00Z"
+   }
+
+4. GET ALL TRANSACTIONS
+
+   URL: http://localhost:5000/api/transactions?pageNumber=1&pageSize=10
+   Method: GET
+   Headers: Authorization: Bearer <TOKEN>
+
+MUDAH! Gunakan Swagger UI untuk testing lebih mudah: http://localhost:5000/swagger
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DATABASE - AKSES VIA PGADMIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Buka: http://localhost:5050
+
+2. Login dengan:
+   Email: admin@shagofinote.app
+   Password: admin
+
+3. Add server dengan:
+   Host: postgres
+   Port: 5432
+   Database: shagofinote
+   Username: postgres
+   Password: postgres
+
+4. Lihat semua data di database
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LOGS & DEBUGGING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Lihat logs:
+  docker-compose logs -f api
+
+Lihat logs real-time:
+  docker-compose logs -f
+
+Lihat logs hanya database:
+  docker-compose logs -f postgres
+
+Stop container:
+  docker-compose down
+
+Hapus semua (reset):
+  docker-compose down -v
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MASALAH: Port 5000 sudah dipakai
+SOLUSI:
+  1. Tutup aplikasi lain yang gunakan port 5000
+  2. Atau ubah port di docker-compose.yml:
+     Change "5000:5000" to "5001:5000"
+     Akses di http://localhost:5001
+
+MASALAH: Docker not found / Docker not running
+SOLUSI:
+  1. Install Docker Desktop: https://www.docker.com/products/docker-desktop
+  2. Buka Docker Desktop
+  3. Tunggu sampai Docker ready
+  4. Coba lagi
+
+MASALAH: Cannot connect to database
+SOLUSI:
+  docker-compose up -d postgres
+  Tunggu 5 detik
+  docker-compose up -d api
+
+MASALAH: Permission denied (untuk Linux)
+SOLUSI:
+  sudo chmod +x run.sh
+  sudo ./run.sh
+
+MASALAH: Mau reset/hapus semua data
+SOLUSI:
+  docker-compose down -v
+  docker-compose up -d
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SERVICES YANG RUNNING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ketika docker-compose up -d, 3 services akan running:
+
+1. PostgreSQL Database
+   - Port: 5432
+   - Username: postgres
+   - Password: postgres
+   - Database: shagofinote
+
+2. Shago Finote API (.NET)
+   - Port: 5000
+   - URL: http://localhost:5000
+   - Health: http://localhost:5000/health
+   - Swagger: http://localhost:5000/swagger
+
+3. PgAdmin (Database Management UI)
+   - Port: 5050
+   - URL: http://localhost:5050
+   - Email: admin@shagofinote.app
+   - Password: admin
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+USEFUL COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Docker:
+  docker-compose up -d              Start services
+  docker-compose down               Stop services
+  docker-compose logs -f api        View logs
+  docker-compose ps                 List containers
+  docker-compose exec api bash      Shell into container
+
+Status:
+  curl http://localhost:5000/health        Check API
+  docker-compose ps                        Check services
+  docker stats                             Monitor resources
+
+Database:
+  docker exec shagofinote-postgres psql -U postgres -d shagofinote
+  SELECT * FROM users;
+  SELECT * FROM transactions;
+
+Reset:
+  docker-compose down -v                   Delete all data
+  docker image rm shagofinote-api          Delete image
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DOCUMENTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Untuk info lebih detail:
+  - QUICK_RUN.md              → Quick reference
+  - RUN_GUIDE.md              → Detailed guide lengkap
+  - README.md                 → API documentation
+  - SETUP.md                  → Setup instructions
+  - IMPLEMENTATION_COMPLETE.md → Technical details
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Backend .NET siap dijalankan
+✓ Database PostgreSQL included
+✓ Swagger UI untuk testing
+✓ Docker untuk easy deployment
+✓ Scripts untuk automation
+
+3 CARA MENJALANKAN:
+1. docker-compose up -d                    (EASIEST)
+2. dotnet run (locally)
+3. ./run.sh atau run.bat (interactive)
+
+READY TO GO! 🚀
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pertanyaan? Lihat RUN_GUIDE.md untuk FAQ & troubleshooting lebih detail.
+
