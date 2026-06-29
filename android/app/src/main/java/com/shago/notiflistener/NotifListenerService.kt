@@ -1,4 +1,4 @@
-package com.shago.notiflistener
+package com.shago.finote
 
 import android.app.Notification
 import android.service.notification.NotificationListenerService

@@ -263,10 +263,10 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    fontSize: 20,
   },
   tabIconActive: {
-    color: '#c9152a',
+    backgroundColor: '#2a1b20',
+    borderRadius: 16,
   },
   tabIconText: {
     fontSize: 20,

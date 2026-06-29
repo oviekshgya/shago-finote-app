@@ -91,7 +91,13 @@ export default function DashboardScreen(): React.JSX.Element {
                 amount={summary.netCashFlow}
                 type="net"
               />
+              <SummaryMetric
+                title="Total Transaksi"
+                value={summary.transactionCount.toString()}
+              />
             </View>
+
+            <CashflowChart data={summary.dailyCashflow} />
 
             {/* Top Categories */}
             {summary.topExpenseCategories.length > 0 && (
@@ -148,6 +154,64 @@ function SummaryCard({
       <Text style={[styles.summaryCardAmount, { color: textColor }]}>
         {formatCurrency(amount)}
       </Text>
+    </View>
+  );
+}
+
+function SummaryMetric({title, value}: {title: string; value: string}) {
+  return (
+    <View style={[styles.summaryCard, styles.metricCard]}>
+      <Text style={styles.summaryCardTitle}>{title}</Text>
+      <Text style={styles.metricValue}>{value}</Text>
+    </View>
+  );
+}
+
+function CashflowChart({
+  data,
+}: {
+  data: Array<{date: string; income: number; expense: number; net: number}>;
+}) {
+  const chartData = data.length > 0 ? data : [{date: '', income: 0, expense: 0, net: 0}];
+  const maxValue = Math.max(
+    1,
+    ...chartData.map(item => Math.max(item.income, item.expense)),
+  );
+
+  return (
+    <View style={styles.chartSection}>
+      <View style={styles.chartHeader}>
+        <Text style={styles.sectionTitle}>Grafik Keuangan</Text>
+        <Text style={styles.chartHint}>14 hari terakhir</Text>
+      </View>
+      <View style={styles.chartContainer}>
+        {chartData.map((item, index) => {
+          const incomeHeight = Math.max(4, (item.income / maxValue) * 92);
+          const expenseHeight = Math.max(4, (item.expense / maxValue) * 92);
+          const date = item.date ? new Date(item.date) : null;
+          return (
+            <View key={`${item.date}-${index}`} style={styles.chartColumn}>
+              <View style={styles.chartBars}>
+                <View style={[styles.chartBar, styles.incomeBar, {height: incomeHeight}]} />
+                <View style={[styles.chartBar, styles.expenseBar, {height: expenseHeight}]} />
+              </View>
+              <Text style={styles.chartLabel}>
+                {date ? date.getDate().toString() : '-'}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, {backgroundColor: '#22c55e'}]} />
+          <Text style={styles.legendText}>Pemasukan</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, {backgroundColor: '#ef4444'}]} />
+          <Text style={styles.legendText}>Pengeluaran</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -236,14 +300,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 16,
     marginBottom: 24,
-    gap: 12,
+    gap: 10,
   },
   summaryCard: {
+    width: '48.5%',
+    minHeight: 96,
+    justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: '#2a2a2e',
   },
   summaryCardTitle: {
@@ -252,9 +321,87 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryCardAmount: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  metricCard: {
+    backgroundColor: '#20242d',
+  },
+  metricValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  chartSection: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: '#1b1b1f',
+    borderWidth: 1,
+    borderColor: '#2a2a2c',
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  chartHint: {
+    fontSize: 11,
+    color: '#9b8c86',
+  },
+  chartContainer: {
+    height: 128,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+    paddingTop: 8,
+  },
+  chartColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  chartBars: {
+    height: 100,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  chartBar: {
+    width: 5,
+    borderRadius: 3,
+  },
+  incomeBar: {
+    backgroundColor: '#22c55e',
+  },
+  expenseBar: {
+    backgroundColor: '#ef4444',
+  },
+  chartLabel: {
+    marginTop: 6,
+    fontSize: 10,
+    color: '#9b8c86',
+  },
+  legendRow: {
+    flexDirection: 'row',
+    gap: 14,
+    marginTop: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 11,
+    color: '#d1d5db',
   },
   section: {
     paddingHorizontal: 16,

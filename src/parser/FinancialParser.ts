@@ -4,7 +4,7 @@
  * Mendukung berbagai bank dan e-wallet Indonesia
  */
 
-import { v4 as uuidv4 } from 'react-native-uuid';
+import uuid from 'react-native-uuid';
 import type {
   FinancialTransaction,
   TransactionType,
@@ -141,7 +141,7 @@ export const DEFAULT_PARSER_RULES: Record<string, ParserRule> = {
     categoryExtractor: (notif) => {
       const text = `${notif.title || ''} ${notif.text || ''}`.toLowerCase();
       if (text.includes('bayar')) return 'shopping';
-      if (text.includes('transfer')) return 'transfer';
+      if (text.includes('transfer')) return 'other';
       return 'other';
     },
     version: 1,
@@ -274,7 +274,7 @@ export class FinancialParser {
       }
 
       const transaction: FinancialTransaction = {
-        id: uuidv4() as string,
+        id: uuid.v4() as string,
         sourceType: 'auto',
         sourceApp: rule.bankName,
         sourcePackageName: notification.packageName,

@@ -5,6 +5,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FinancialTransaction, FinancialSummary } from '../types/FinancialTransaction';
 import { FinancialStorage } from '../storage/FinancialStorage';
+import NotificationModule from '../native/NotificationModule';
+import {TransactionCaptureService} from '../services/TransactionCaptureService';
 
 export interface UseTransactionsResult {
   transactions: FinancialTransaction[];
@@ -32,6 +34,7 @@ export function useTransactions(): UseTransactionsResult {
     setLoading(true);
     setError(null);
     try {
+      await TransactionCaptureService.syncFromNotificationModule(NotificationModule);
       const data = await FinancialStorage.getAllTransactions();
       setTransactions(data);
     } catch (err) {
@@ -43,6 +46,10 @@ export function useTransactions(): UseTransactionsResult {
 
   useEffect(() => {
     refresh();
+    const timer = setInterval(() => {
+      refresh();
+    }, 15000);
+    return () => clearInterval(timer);
   }, [refresh]);
 
   const addTransaction = useCallback(
@@ -133,6 +140,7 @@ export function useFinancialSummary(period: 'today' | 'week' | 'month' | 'all' =
     setLoading(true);
     setError(null);
     try {
+      await TransactionCaptureService.syncFromNotificationModule(NotificationModule);
       const data = await FinancialStorage.calculateFinancialSummary(period);
       setSummary(data);
     } catch (err) {
@@ -144,6 +152,10 @@ export function useFinancialSummary(period: 'today' | 'week' | 'month' | 'all' =
 
   useEffect(() => {
     refresh();
+    const timer = setInterval(() => {
+      refresh();
+    }, 15000);
+    return () => clearInterval(timer);
   }, [refresh]);
 
   return { summary, loading, error, refresh };

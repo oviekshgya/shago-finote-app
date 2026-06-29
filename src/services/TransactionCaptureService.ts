@@ -44,8 +44,9 @@ export class TransactionCaptureService {
     try {
       this.initialize();
 
-      // Parse notifikasi
-      const parseResult = FinancialParser.parse(notification);
+      // Parse notifikasi. User-defined source rules take priority over default parser rules.
+      const parseResult =
+        (await this.parseWithUserRule(notification)) ?? FinancialParser.parse(notification);
 
       if (!parseResult.success || !parseResult.transaction) {
         // Log raw notification untuk debugging
@@ -57,7 +58,7 @@ export class TransactionCaptureService {
           bigText: notification.bigText,
           subText: notification.subText,
           notificationId: notification.notificationId,
-          tag: notification.tag,
+          tag: notification.tag ?? undefined,
           postTime: notification.postTime,
           receivedAt: notification.receivedAt,
           parserAttempted: true,
@@ -102,7 +103,7 @@ export class TransactionCaptureService {
         bigText: notification.bigText,
         subText: notification.subText,
         notificationId: notification.notificationId,
-        tag: notification.tag,
+        tag: notification.tag ?? undefined,
         postTime: notification.postTime,
         receivedAt: notification.receivedAt,
         parserAttempted: true,
@@ -226,6 +227,120 @@ export class TransactionCaptureService {
       console.error('[TransactionCaptureService] Sync error:', error);
       return { captured: 0, failed: 1, duplicates: 0 };
     }
+  }
+
+  private static async parseWithUserRule(notification: NotificationLog): Promise<ParseResult | null> {
+    const rules = await FinancialStorage.getCaptureRules();
+    const rule = rules.find(
+      item => item.enabled && item.packageName === notification.packageName,
+    );
+
+    if (!rule) {
+      return null;
+    }
+
+    const text = this.getNotificationText(notification);
+    const lowerText = text.toLowerCase();
+    const incomeMatched = this.matchesAnyPrefix(lowerText, rule.incomePrefixes);
+    const expenseMatched = this.matchesAnyPrefix(lowerText, rule.expensePrefixes);
+
+    if (!incomeMatched && !expenseMatched) {
+      return {
+        success: false,
+        confidence: 0,
+        ruleName: `user-rule:${rule.packageName}`,
+        error: `No income/expense prefix matched for ${rule.appLabel}`,
+      };
+    }
+
+    const amount = this.extractRupiahAmount(text);
+    if (!amount) {
+      return {
+        success: false,
+        confidence: 0,
+        ruleName: `user-rule:${rule.packageName}`,
+        error: `No Rupiah amount found for ${rule.appLabel}`,
+      };
+    }
+
+    const type = incomeMatched ? 'income' : 'expense';
+    const now = Date.now();
+    const transaction: FinancialTransaction = {
+      id: `notif-${notification.id}`,
+      sourceType: 'auto',
+      sourceApp: rule.appLabel,
+      sourcePackageName: notification.packageName,
+      rawNotificationId: notification.id,
+      type,
+      status: 'completed',
+      category: type === 'income' ? 'other' : 'shopping',
+      amount,
+      currency: 'IDR',
+      description: `${notification.title || rule.appLabel} - ${notification.text || notification.bigText || ''}`.trim(),
+      merchant: this.extractCounterparty(text),
+      date: notification.postTime || notification.receivedAt || now,
+      createdAt: now,
+      updatedAt: now,
+      parserConfidence: 90,
+      parserRuleName: `user-rule:${rule.packageName}`,
+      parserVersion: 'user-prefix-v1',
+      syncStatus: 'pending',
+      isDuplicate: false,
+      isEdited: false,
+      isHidden: false,
+      isVerified: false,
+    };
+
+    return {
+      success: true,
+      transaction,
+      confidence: 90,
+      ruleName: `user-rule:${rule.packageName}`,
+    };
+  }
+
+  private static getNotificationText(notification: NotificationLog): string {
+    return [
+      notification.title,
+      notification.text,
+      notification.subText,
+      notification.bigText,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  private static matchesAnyPrefix(text: string, prefixes: string[]): boolean {
+    return prefixes
+      .map(prefix => prefix.trim().toLowerCase())
+      .filter(Boolean)
+      .some(prefix => text.includes(prefix));
+  }
+
+  private static extractRupiahAmount(text: string): number | null {
+    const matches = text.match(/(?:rp|idr)\s*[\d.]+(?:,\d{1,2})?|[\d.]+(?:,\d{1,2})?\s*(?:rp|idr)/gi);
+    if (!matches || matches.length === 0) {
+      return null;
+    }
+    const amounts = matches
+      .map(match => {
+        const cleaned = match
+          .replace(/rp|idr/gi, '')
+          .replace(/\s/g, '')
+          .replace(/\./g, '')
+          .replace(/,\d{1,2}$/, '');
+        const amount = Number(cleaned);
+        return Number.isFinite(amount) ? amount : 0;
+      })
+      .filter(amount => amount > 0)
+      .sort((a, b) => b - a);
+
+    return amounts[0] || null;
+  }
+
+  private static extractCounterparty(text: string): string | undefined {
+    const match = text.match(/(?:dari|ke|di|kepada)\s+([A-Za-z0-9 ._-]{3,32})/i);
+    return match?.[1]?.trim();
   }
 
   /**

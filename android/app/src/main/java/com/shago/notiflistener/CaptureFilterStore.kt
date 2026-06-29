@@ -1,4 +1,4 @@
-package com.shago.notiflistener
+package com.shago.finote
 
 import android.content.Context
 import org.json.JSONArray
@@ -10,7 +10,7 @@ object CaptureFilterStore {
 
     private fun defaultFilter(): JSONObject =
         JSONObject().apply {
-            put("captureAll", true)
+            put("captureAll", false)
             put("packages", JSONArray())
         }
 
@@ -20,7 +20,7 @@ object CaptureFilterStore {
 
     fun save(context: Context, filter: JSONObject): Boolean {
         if (!filter.has("captureAll")) {
-            filter.put("captureAll", true)
+            filter.put("captureAll", false)
         }
         if (!filter.has("packages")) {
             filter.put("packages", JSONArray())
@@ -33,7 +33,7 @@ object CaptureFilterStore {
 
     fun shouldCapture(context: Context, packageName: String): Boolean {
         val filter = JSONObject(get(context))
-        if (filter.optBoolean("captureAll", true)) {
+        if (filter.optBoolean("captureAll", false)) {
             return true
         }
 

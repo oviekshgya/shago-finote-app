@@ -1,4 +1,4 @@
-package com.shago.notiflistener
+package com.shago.finote
 
 import android.util.Base64
 import org.json.JSONObject
