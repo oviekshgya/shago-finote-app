@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import {colors, radii} from '../theme/finoteTheme';
 
 interface SettingSectionProps {
   title: string;
@@ -50,19 +51,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.ink,
   },
   chevron: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: colors.muted,
   },
   sectionContent: {
     marginTop: 10,

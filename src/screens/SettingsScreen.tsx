@@ -25,6 +25,7 @@ import {SettingSection} from '../components/SettingSection';
 import {Card} from '../components/Card';
 import type {CaptureFilter, InstalledApp} from '../types/NotificationLog';
 import type {CaptureRule} from '../types/CaptureRule';
+import {colors, radii} from '../theme/finoteTheme';
 
 export default function SettingsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
@@ -209,11 +210,12 @@ export default function SettingsScreen(): React.JSX.Element {
 
   return (
     <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
-      <StatusBar barStyle="light-content" backgroundColor="#111113" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView contentContainerStyle={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Pengaturan</Text>
+          <Text style={styles.eyebrow}>Help</Text>
+          <Text style={styles.title}>Settings</Text>
           <Text style={styles.subtitle}>Konfigurasi listener, source notifikasi, dan data lokal</Text>
         </View>
 
@@ -223,7 +225,7 @@ export default function SettingsScreen(): React.JSX.Element {
             <View style={styles.statusContent}>
               <View style={styles.statusLeft}>
                 <Text style={styles.statusLabel}>Notification Listener</Text>
-                <Text style={[styles.statusValue, {color: listenerEnabled ? '#4ade80' : '#f87171'}]}>
+                <Text style={[styles.statusValue, {color: listenerEnabled ? colors.teal : colors.red}]}>
                   {listenerEnabled ? 'AKTIF' : 'BELUM AKTIF'}
                 </Text>
                 <Text style={styles.statusDesc}>
@@ -311,7 +313,7 @@ export default function SettingsScreen(): React.JSX.Element {
               value={incomeDraft}
               onChangeText={setIncomeDraft}
               placeholder="menerima, diterima, uang masuk"
-              placeholderTextColor="#737373"
+              placeholderTextColor={colors.faint}
               multiline
             />
 
@@ -321,7 +323,7 @@ export default function SettingsScreen(): React.JSX.Element {
               value={expenseDraft}
               onChangeText={setExpenseDraft}
               placeholder="pembayaran, bayar, transfer ke"
-              placeholderTextColor="#737373"
+              placeholderTextColor={colors.faint}
               multiline
             />
             <Text style={styles.ruleHint}>Pisahkan prefix dengan koma. Nominal Rp/IDR dibaca otomatis dari notifikasi.</Text>
@@ -360,7 +362,7 @@ export default function SettingsScreen(): React.JSX.Element {
               value={appSearch}
               onChangeText={setAppSearch}
               placeholder="Cari: BCA, DANA, OVO, GoPay, Gojek..."
-              placeholderTextColor="#737373"
+              placeholderTextColor={colors.faint}
               autoFocus
             />
 
@@ -485,24 +487,30 @@ function isLikelyFinanceApp(app: InstalledApp): boolean {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
+    padding: 18,
     paddingBottom: 32,
   },
   header: {
     marginBottom: 20,
   },
+  eyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 27,
+    fontWeight: '900',
+    color: colors.ink,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: '#9ca3af',
+    color: colors.muted,
   },
   statusContent: {
     flexDirection: 'row',
@@ -514,7 +522,7 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: colors.muted,
     fontWeight: '700',
     marginBottom: 4,
   },
@@ -525,7 +533,7 @@ const styles = StyleSheet.create({
   },
   statusDesc: {
     fontSize: 12,
-    color: '#d1d5db',
+    color: colors.muted,
     lineHeight: 17,
   },
   statusIndicator: {
@@ -535,19 +543,19 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   indicatorOn: {
-    backgroundColor: '#14532d',
+    backgroundColor: colors.tealSoft,
   },
   indicatorOff: {
-    backgroundColor: '#4b1d1d',
+    backgroundColor: colors.redSoft,
   },
   infoText: {
-    color: '#d1d5db',
+    color: colors.muted,
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 10,
   },
   modeLabel: {
-    color: '#86efac',
+    color: colors.teal,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -558,7 +566,7 @@ const styles = StyleSheet.create({
   enabledRulesTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#9ca3af',
+    color: colors.muted,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
@@ -568,32 +576,32 @@ const styles = StyleSheet.create({
   searchLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#9ca3af',
+    color: colors.muted,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   searchInput: {
     minHeight: 44,
     marginBottom: 12,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     paddingHorizontal: 12,
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 13,
   },
   primaryActionButton: {
     minHeight: 48,
     marginTop: 10,
     marginBottom: 10,
-    borderRadius: 8,
-    backgroundColor: '#c9152a',
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryActionText: {
-    color: '#ffffff',
+    color: colors.surface,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -605,10 +613,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -618,22 +626,22 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   appLabel: {
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 13,
     fontWeight: '800',
     marginBottom: 2,
   },
   appPackage: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 11,
   },
   addSourceText: {
-    color: '#86efac',
+    color: colors.teal,
     fontSize: 16,
     fontWeight: '800',
   },
   noAppsText: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 12,
     textAlign: 'center',
     paddingVertical: 16,
@@ -642,10 +650,10 @@ const styles = StyleSheet.create({
     minHeight: 58,
     marginBottom: 10,
     paddingHorizontal: 14,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -654,45 +662,45 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionTitle: {
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 2,
   },
   actionSubtitle: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 12,
   },
   actionChevron: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 20,
     marginLeft: 12,
   },
   dangerText: {
-    color: '#f87171',
+    color: colors.red,
   },
   activeSourceRow: {
     minHeight: 68,
     padding: 12,
     marginBottom: 8,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
   },
   ruleTitle: {
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 2,
   },
   prefixSummary: {
     marginTop: 4,
-    color: '#86efac',
+    color: colors.teal,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -704,10 +712,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#1d4ed8',
+    backgroundColor: colors.primarySoft,
   },
   setupButtonText: {
-    color: '#dbeafe',
+    color: colors.primary,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -715,15 +723,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#4b1d1d',
+    backgroundColor: colors.redSoft,
   },
   disableButtonText: {
-    color: '#fecaca',
+    color: colors.red,
     fontSize: 11,
     fontWeight: '800',
   },
   inputLabel: {
-    color: '#f3f4f6',
+    color: colors.ink,
     fontSize: 11,
     fontWeight: '800',
     marginBottom: 6,
@@ -733,16 +741,16 @@ const styles = StyleSheet.create({
     minHeight: 52,
     marginBottom: 10,
     borderRadius: 6,
-    backgroundColor: '#1a1a1e',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     paddingHorizontal: 10,
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 12,
     textAlignVertical: 'top',
   },
   ruleHint: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 11,
     lineHeight: 16,
   },
@@ -754,25 +762,25 @@ const styles = StyleSheet.create({
   dataBox: {
     flex: 1,
     minHeight: 70,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dataValue: {
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 18,
     fontWeight: '800',
   },
   dataLabel: {
     marginTop: 4,
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 11,
   },
   privacyText: {
-    color: '#d1d5db',
+    color: colors.muted,
     fontSize: 13,
     lineHeight: 20,
   },
@@ -786,9 +794,9 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
-    backgroundColor: '#151518',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
   },
   modalSheetTall: {
     maxHeight: '82%',
@@ -796,9 +804,9 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
-    backgroundColor: '#151518',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -813,12 +821,12 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#27272a',
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCloseText: {
-    color: '#ffffff',
+    color: colors.primary,
     fontSize: 22,
     lineHeight: 24,
     fontWeight: '700',
@@ -827,14 +835,14 @@ const styles = StyleSheet.create({
     maxHeight: 420,
   },
   modalTitle: {
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 20,
     fontWeight: '800',
   },
   modalSubtitle: {
     marginTop: 4,
     marginBottom: 16,
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 13,
   },
   modalActions: {
@@ -845,25 +853,25 @@ const styles = StyleSheet.create({
   modalCancelButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 8,
-    backgroundColor: '#27272a',
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCancelText: {
-    color: '#e5e7eb',
+    color: colors.ink,
     fontWeight: '800',
   },
   modalSaveButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 8,
-    backgroundColor: '#c9152a',
+    borderRadius: radii.md,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalSaveText: {
-    color: '#ffffff',
+    color: colors.surface,
     fontWeight: '800',
   },
 });

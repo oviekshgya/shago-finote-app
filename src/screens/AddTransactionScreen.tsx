@@ -19,6 +19,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {FinancialStorage} from '../storage/FinancialStorage';
 import type {FinancialTransaction, TransactionCategory, TransactionType} from '../types/FinancialTransaction';
+import {colors, radii, shadow} from '../theme/finoteTheme';
 
 const categories: Array<{value: TransactionCategory; label: string}> = [
   {value: 'food', label: 'Makanan'},
@@ -97,10 +98,11 @@ export default function AddTransactionScreen(): React.JSX.Element {
     <KeyboardAvoidingView
       style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <StatusBar barStyle="light-content" backgroundColor="#111113" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.title}>Tambah Transaksi</Text>
+          <Text style={styles.eyebrow}>Record</Text>
+          <Text style={styles.title}>Add transaction</Text>
           <Text style={styles.subtitle}>Catat pemasukan atau pengeluaran manual.</Text>
         </View>
 
@@ -117,16 +119,17 @@ export default function AddTransactionScreen(): React.JSX.Element {
           ))}
         </View>
 
-        <Field label="Nominal">
+        <View style={styles.amountCard}>
+          <Text style={styles.amountLabel}>Amount</Text>
           <TextInput
-            style={styles.input}
+            style={styles.amountInput}
             value={amount}
             onChangeText={handleAmountChange}
             keyboardType="numeric"
             placeholder="Rp 50.000"
-            placeholderTextColor="#737373"
+            placeholderTextColor="#d6ccff"
           />
-        </Field>
+        </View>
 
         <Field label="Catatan">
           <TextInput
@@ -134,7 +137,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
             value={description}
             onChangeText={setDescription}
             placeholder="Contoh: Makan siang"
-            placeholderTextColor="#737373"
+            placeholderTextColor={colors.faint}
           />
         </Field>
 
@@ -144,7 +147,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
             value={merchant}
             onChangeText={setMerchant}
             placeholder="Opsional"
-            placeholderTextColor="#737373"
+            placeholderTextColor={colors.faint}
           />
         </Field>
 
@@ -193,24 +196,30 @@ function formatRupiahInput(value: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
+    padding: 18,
     paddingBottom: 32,
   },
   header: {
     marginBottom: 18,
   },
+  eyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 27,
+    fontWeight: '900',
+    color: colors.ink,
   },
   subtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: '#9ca3af',
+    color: colors.muted,
   },
   segment: {
     flexDirection: 'row',
@@ -220,41 +229,61 @@ const styles = StyleSheet.create({
   segmentButton: {
     flex: 1,
     paddingVertical: 11,
-    borderRadius: 8,
-    backgroundColor: '#242428',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
   },
   segmentButtonActive: {
-    backgroundColor: '#c9152a',
-    borderColor: '#c9152a',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   segmentText: {
     textAlign: 'center',
-    color: '#d1d5db',
+    color: colors.muted,
     fontWeight: '700',
     fontSize: 12,
   },
   segmentTextActive: {
-    color: '#ffffff',
+    color: colors.surface,
+  },
+  amountCard: {
+    padding: 18,
+    borderRadius: radii.xl,
+    backgroundColor: colors.primary,
+    marginBottom: 16,
+    ...shadow,
+  },
+  amountLabel: {
+    color: '#ded8ff',
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  amountInput: {
+    minHeight: 54,
+    color: colors.surface,
+    fontSize: 30,
+    fontWeight: '900',
+    padding: 0,
   },
   field: {
     marginBottom: 14,
   },
   fieldLabel: {
     marginBottom: 8,
-    color: '#f3f4f6',
+    color: colors.ink,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '900',
   },
   input: {
     minHeight: 46,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     paddingHorizontal: 12,
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 14,
   },
   categoryGrid: {
@@ -266,28 +295,28 @@ const styles = StyleSheet.create({
   categoryButton: {
     paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#242428',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
   },
   categoryButtonActive: {
-    backgroundColor: '#1f3d2a',
-    borderColor: '#22c55e',
+    backgroundColor: colors.tealSoft,
+    borderColor: colors.teal,
   },
   categoryText: {
-    color: '#d1d5db',
+    color: colors.muted,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   categoryTextActive: {
-    color: '#86efac',
+    color: colors.teal,
   },
   saveButton: {
     marginTop: 6,
     minHeight: 48,
-    borderRadius: 8,
-    backgroundColor: '#c9152a',
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -295,8 +324,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveButtonText: {
-    color: '#ffffff',
+    color: colors.surface,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
   },
 });

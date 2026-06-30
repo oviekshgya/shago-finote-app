@@ -1,28 +1,29 @@
-/**
- * Dashboard Screen
- * Menampilkan ringkasan keuangan dan analytics
- */
-
-import React, { useEffect, useState } from 'react';
+import React, {useState} from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
   ActivityIndicator,
   Pressable,
   RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { FinancialSummary } from '../types/FinancialTransaction';
-import { useFinancialSummary } from '../hooks/useTransactions';
-import { formatCurrency } from '../utils/TransactionUtils';
+import {useNavigation} from '@react-navigation/native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import type {FinancialSummary, TransactionCategory} from '../types/FinancialTransaction';
+import {useFinancialSummary} from '../hooks/useTransactions';
+import {formatCurrency} from '../utils/TransactionUtils';
+import {colors, radii, shadow} from '../theme/finoteTheme';
+
+const monthlyBudget = 5000000;
+const goalTarget = 12000000;
 
 export default function DashboardScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
-  const { summary, loading, refresh } = useFinancialSummary(period);
+  const {summary, loading, refresh} = useFinancialSummary(period);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = React.useCallback(() => {
@@ -30,113 +31,92 @@ export default function DashboardScreen(): React.JSX.Element {
     refresh().finally(() => setRefreshing(false));
   }, [refresh]);
 
-  return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a1c" />
+  const budgetUsed = summary ? Math.min(summary.totalExpense / monthlyBudget, 1) : 0;
+  const savedAmount = summary ? Math.max(summary.netCashFlow, 0) : 0;
+  const goalProgress = Math.min(savedAmount / goalTarget, 1);
 
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {paddingTop: Math.max(insets.top, 18) + 8},
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#c9152a"
-            colors={['#c9152a']}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.subtitle}>Ringkasan keuangan Anda</Text>
-            </View>
-            <Pressable style={styles.refreshButton} onPress={onRefresh}>
-              <Text style={styles.refreshButtonText}>Refresh</Text>
-            </Pressable>
+          <View>
+            <Text style={styles.eyebrow}>Shago Finote</Text>
+            <Text style={styles.title}>Home</Text>
           </View>
+          <Pressable style={styles.profileButton} onPress={onRefresh}>
+            <Text style={styles.profileText}>SF</Text>
+          </Pressable>
         </View>
 
-        {/* Period Selector */}
-        <View style={styles.periodSelectorContainer}>
-          <View style={styles.periodSelector}>
-            {(['today', 'week', 'month', 'all'] as const).map(p => (
-              <Pressable
-                key={p}
-                style={[styles.periodButton, period === p && styles.periodButtonActive]}
-                onPress={() => setPeriod(p)}>
-                <Text
-                  style={[
-                    styles.periodButtonText,
-                    period === p && styles.periodButtonTextActive,
-                  ]}>
-                  {p === 'today' ? 'Hari Ini' : p === 'week' ? 'Minggu' : p === 'month' ? 'Bulan' : 'Semua'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
+        <PeriodSelector value={period} onChange={setPeriod} />
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color="#c9152a" size="large" />
+            <ActivityIndicator color={colors.primary} size="large" />
           </View>
         ) : summary ? (
           <>
-            {/* Summary Cards */}
-            <View style={styles.summaryGrid}>
-              <SummaryCard
-                title="Total Pemasukan"
+            <BalanceCard summary={summary} budgetUsed={budgetUsed} />
+
+            <View style={styles.quickGrid}>
+              <QuickAction icon="+" label="Catat" onPress={() => navigation.navigate('Add')} />
+              <QuickAction icon="↑" label="Upload" />
+              <QuickAction icon="●" label="Voice" />
+              <QuickAction icon="?" label="Help" />
+            </View>
+
+            <SectionHeader title="Insights" action="This month" />
+            <View style={styles.insightGrid}>
+              <InsightCard
+                title="Income"
                 amount={summary.totalIncome}
-                type="income"
+                helper={`${summary.incomeCount} transaksi masuk`}
+                tone="teal"
               />
-              <SummaryCard
-                title="Total Pengeluaran"
+              <InsightCard
+                title="Expense"
                 amount={summary.totalExpense}
-                type="expense"
-              />
-              <SummaryCard
-                title="Net Cashflow"
-                amount={summary.netCashFlow}
-                type="net"
-              />
-              <SummaryMetric
-                title="Total Transaksi"
-                value={summary.transactionCount.toString()}
+                helper={`${summary.expenseCount} transaksi keluar`}
+                tone="pink"
               />
             </View>
 
-            <CashflowChart data={summary.dailyCashflow} />
+            <SpendingOverview summary={summary} budgetUsed={budgetUsed} />
 
-            {/* Top Categories */}
-            {summary.topExpenseCategories.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Pengeluaran Terbesar</Text>
-                {summary.topExpenseCategories.map((cat, idx) => (
-                  <View key={idx} style={styles.categoryRow}>
-                    <Text style={styles.categoryName}>{formatCategoryLabel(cat.category)}</Text>
-                    <Text style={styles.categoryAmount}>{formatCurrency(cat.amount)}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            <SectionHeader title="Goals" action={`${Math.round(goalProgress * 100)}%`} />
+            <GoalCard
+              title="Emergency Fund"
+              target={goalTarget}
+              current={savedAmount}
+              progress={goalProgress}
+            />
 
-            {/* Transaction Summary */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Ringkasan Transaksi</Text>
-              <View style={styles.statsGrid}>
-                <StatCard label="Total" value={summary.transactionCount.toString()} />
-                <StatCard label="Pemasukan" value={summary.incomeCount.toString()} />
-                <StatCard label="Pengeluaran" value={summary.expenseCount.toString()} />
-              </View>
-            </View>
+            <SaveCard balance={savedAmount} />
+
+            <RecentCategories categories={summary.topExpenseCategories} />
           </>
         ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Tidak ada data keuangan</Text>
-            <Pressable style={styles.emptyButton} onPress={onRefresh}>
-              <Text style={styles.emptyButtonText}>Refresh</Text>
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Belum ada data keuangan</Text>
+            <Text style={styles.emptyText}>
+              Catat transaksi pertama untuk mulai melihat insight dan progress budget.
+            </Text>
+            <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('Add')}>
+              <Text style={styles.primaryButtonText}>Tambah Transaksi</Text>
             </Pressable>
           </View>
         )}
@@ -145,366 +125,806 @@ export default function DashboardScreen(): React.JSX.Element {
   );
 }
 
-function SummaryCard({
+function PeriodSelector({
+  value,
+  onChange,
+}: {
+  value: 'today' | 'week' | 'month' | 'all';
+  onChange(value: 'today' | 'week' | 'month' | 'all'): void;
+}) {
+  const items: Array<{value: typeof value; label: string}> = [
+    {value: 'today', label: 'Today'},
+    {value: 'week', label: 'Week'},
+    {value: 'month', label: 'Month'},
+    {value: 'all', label: 'All'},
+  ];
+
+  return (
+    <View style={styles.segment}>
+      {items.map(item => (
+        <Pressable
+          key={item.value}
+          style={[styles.segmentButton, value === item.value && styles.segmentButtonActive]}
+          onPress={() => onChange(item.value)}>
+          <Text
+            style={[
+              styles.segmentText,
+              value === item.value && styles.segmentTextActive,
+            ]}>
+            {item.label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function BalanceCard({
+  summary,
+  budgetUsed,
+}: {
+  summary: FinancialSummary;
+  budgetUsed: number;
+}) {
+  const balance = Math.max(summary.netCashFlow, 0);
+  const paydayDate = new Date();
+  paydayDate.setMonth(paydayDate.getMonth() + 1, 25);
+  const daysToPayday = Math.max(
+    0,
+    Math.ceil((paydayDate.getTime() - Date.now()) / 86400000),
+  );
+
+  return (
+    <View style={styles.balanceCard}>
+      <View style={styles.balanceTop}>
+        <View>
+          <Text style={styles.balanceLabel}>Total balance</Text>
+          <Text style={styles.balanceAmount}>{formatCurrency(balance)}</Text>
+        </View>
+        <View style={styles.rankPill}>
+          <Text style={styles.rankText}>Rank 8</Text>
+        </View>
+      </View>
+
+      <View style={styles.balanceStats}>
+        <MiniStat label="Spending" value={formatCurrency(summary.totalExpense)} tone="pink" />
+        <MiniStat label="Saving" value={formatCurrency(balance)} tone="teal" />
+      </View>
+
+      <View style={styles.paydayRow}>
+        <View style={styles.paydayIcon}>
+          <Text style={styles.paydayIconText}>P</Text>
+        </View>
+        <View style={styles.paydayTextWrap}>
+          <Text style={styles.paydayTitle}>Payday countdown</Text>
+          <Text style={styles.paydayText}>{daysToPayday} days left to next payday</Text>
+        </View>
+        <Text style={styles.paydayPercent}>{Math.round(budgetUsed * 100)}%</Text>
+      </View>
+    </View>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: 'pink' | 'teal';
+}) {
+  return (
+    <View style={[styles.miniStat, tone === 'pink' ? styles.pinkSoft : styles.tealSoft]}>
+      <Text style={styles.miniStatLabel}>{label}</Text>
+      <Text style={styles.miniStatValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function QuickAction({icon, label, onPress}: {icon: string; label: string; onPress?: () => void}) {
+  return (
+    <Pressable style={styles.quickAction} onPress={onPress}>
+      <View style={styles.quickIcon}>
+        <Text style={styles.quickIconText}>{icon}</Text>
+      </View>
+      <Text style={styles.quickLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function InsightCard({
   title,
   amount,
-  type,
+  helper,
+  tone,
 }: {
   title: string;
   amount: number;
-  type: 'income' | 'expense' | 'net';
+  helper: string;
+  tone: 'teal' | 'pink';
 }) {
-  const backgroundColor =
-    type === 'income' ? '#1a4d2e' : type === 'expense' ? '#5a1a1a' : '#2a2a2e';
-  const textColor = type === 'income' ? '#4ade80' : type === 'expense' ? '#f87171' : '#e5e7eb';
-
   return (
-    <View style={[styles.summaryCard, { backgroundColor }]}>
-      <Text style={styles.summaryCardTitle}>{title}</Text>
-      <Text style={[styles.summaryCardAmount, { color: textColor }]}>
-        {formatCurrency(amount)}
-      </Text>
+    <View style={styles.insightCard}>
+      <View style={[styles.insightIcon, tone === 'teal' ? styles.tealSoft : styles.pinkSoft]}>
+        <Text style={[styles.insightIconText, tone === 'teal' ? styles.tealText : styles.pinkText]}>
+          {tone === 'teal' ? '+' : '-'}
+        </Text>
+      </View>
+      <Text style={styles.insightTitle}>{title}</Text>
+      <Text style={styles.insightAmount} numberOfLines={1}>{formatCurrency(amount)}</Text>
+      <Text style={styles.insightHelper}>{helper}</Text>
     </View>
   );
 }
 
-function SummaryMetric({title, value}: {title: string; value: string}) {
-  return (
-    <View style={[styles.summaryCard, styles.metricCard]}>
-      <Text style={styles.summaryCardTitle}>{title}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-    </View>
-  );
-}
-
-function CashflowChart({
-  data,
+function SpendingOverview({
+  summary,
+  budgetUsed,
 }: {
-  data: Array<{date: string; income: number; expense: number; net: number}>;
+  summary: FinancialSummary;
+  budgetUsed: number;
 }) {
-  const chartData = data.length > 0 ? data : [{date: '', income: 0, expense: 0, net: 0}];
-  const maxValue = Math.max(
-    1,
-    ...chartData.map(item => Math.max(item.income, item.expense)),
-  );
-
+  const top = summary.topExpenseCategories.slice(0, 4);
   return (
-    <View style={styles.chartSection}>
-      <View style={styles.chartHeader}>
-        <Text style={styles.sectionTitle}>Grafik Keuangan</Text>
-        <Text style={styles.chartHint}>14 hari terakhir</Text>
-      </View>
-      <View style={styles.chartContainer}>
-        {chartData.map((item, index) => {
-          const incomeHeight = Math.max(4, (item.income / maxValue) * 92);
-          const expenseHeight = Math.max(4, (item.expense / maxValue) * 92);
-          const date = item.date ? new Date(item.date) : null;
-          return (
-            <View key={`${item.date}-${index}`} style={styles.chartColumn}>
-              <View style={styles.chartBars}>
-                <View style={[styles.chartBar, styles.incomeBar, {height: incomeHeight}]} />
-                <View style={[styles.chartBar, styles.expenseBar, {height: expenseHeight}]} />
-              </View>
-              <Text style={styles.chartLabel}>
-                {date ? date.getDate().toString() : '-'}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-      <View style={styles.legendRow}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, {backgroundColor: '#22c55e'}]} />
-          <Text style={styles.legendText}>Pemasukan</Text>
+    <View style={styles.overviewCard}>
+      <View style={styles.overviewHeader}>
+        <View>
+          <Text style={styles.cardTitle}>Spending overview</Text>
+          <Text style={styles.cardSubtitle}>Budget progress by category</Text>
         </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, {backgroundColor: '#ef4444'}]} />
-          <Text style={styles.legendText}>Pengeluaran</Text>
+        <Text style={styles.overviewAmount}>{formatCurrency(summary.totalExpense)}</Text>
+      </View>
+      <ProgressBar progress={budgetUsed} color={colors.primary} />
+      <View style={styles.categoryList}>
+        {top.length > 0 ? top.map(item => (
+          <CategoryRow key={item.category} category={item.category} amount={item.amount} total={summary.totalExpense} />
+        )) : (
+          <Text style={styles.mutedText}>Belum ada pengeluaran pada periode ini.</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function GoalCard({
+  title,
+  target,
+  current,
+  progress,
+}: {
+  title: string;
+  target: number;
+  current: number;
+  progress: number;
+}) {
+  const monthlyNeed = Math.max(Math.ceil((target - current) / 6), 0);
+  return (
+    <View style={styles.goalCard}>
+      <View style={styles.goalBadge}>
+        <Text style={styles.goalBadgeText}>GO</Text>
+      </View>
+      <View style={styles.goalMain}>
+        <Text style={styles.goalTitle}>{title}</Text>
+        <Text style={styles.goalTarget}>Target {formatCurrency(target)}</Text>
+        <ProgressBar progress={progress} color={colors.teal} />
+        <View style={styles.goalFooter}>
+          <Text style={styles.goalCurrent}>{formatCurrency(current)}</Text>
+          <Text style={styles.goalNeed}>{formatCurrency(monthlyNeed)}/mo</Text>
         </View>
       </View>
     </View>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function SaveCard({balance}: {balance: number}) {
   return (
-    <View style={styles.statCard}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+    <View style={styles.saveCard}>
+      <View>
+        <Text style={styles.saveLabel}>VIP Save</Text>
+        <Text style={styles.saveTitle}>Smart saving pocket</Text>
+        <Text style={styles.saveText}>Estimate yield and separate money for goals.</Text>
+      </View>
+      <View style={styles.saveAmountWrap}>
+        <Text style={styles.saveAmount}>{formatCurrency(balance)}</Text>
+        <Text style={styles.saveRate}>4.2% p.a.</Text>
+      </View>
     </View>
   );
 }
 
-function formatCategoryLabel(category: string): string {
-  const labels: Record<string, string> = {
-    salary: 'Gaji',
+function RecentCategories({
+  categories,
+}: {
+  categories: Array<{category: TransactionCategory; amount: number}>;
+}) {
+  if (categories.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <SectionHeader title="Recent spend" />
+      <View style={styles.recentCard}>
+        {categories.slice(0, 5).map(item => (
+          <CategoryRow key={item.category} category={item.category} amount={item.amount} total={categories[0].amount} />
+        ))}
+      </View>
+    </>
+  );
+}
+
+function CategoryRow({
+  category,
+  amount,
+  total,
+}: {
+  category: TransactionCategory;
+  amount: number;
+  total: number;
+}) {
+  const progress = total > 0 ? Math.min(amount / total, 1) : 0;
+  return (
+    <View style={styles.categoryRow}>
+      <View style={styles.categoryLeft}>
+        <View style={styles.categoryDot}>
+          <Text style={styles.categoryDotText}>{formatCategoryLabel(category).slice(0, 1)}</Text>
+        </View>
+        <View style={styles.categoryCopy}>
+          <Text style={styles.categoryName}>{formatCategoryLabel(category)}</Text>
+          <ProgressBar progress={progress} color={colors.orange} compact />
+        </View>
+      </View>
+      <Text style={styles.categoryAmount}>{formatCurrency(amount)}</Text>
+    </View>
+  );
+}
+
+function SectionHeader({title, action}: {title: string; action?: string}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {action ? <Text style={styles.sectionAction}>{action}</Text> : null}
+    </View>
+  );
+}
+
+function ProgressBar({
+  progress,
+  color,
+  compact,
+}: {
+  progress: number;
+  color: string;
+  compact?: boolean;
+}) {
+  return (
+    <View style={[styles.progressTrack, compact && styles.progressTrackCompact]}>
+      <View
+        style={[
+          styles.progressFill,
+          compact && styles.progressFillCompact,
+          {width: `${Math.max(4, Math.round(progress * 100))}%`, backgroundColor: color},
+        ]}
+      />
+    </View>
+  );
+}
+
+function formatCategoryLabel(category: TransactionCategory): string {
+  const labels: Record<TransactionCategory, string> = {
+    salary: 'Salary',
     bonus: 'Bonus',
     freelance: 'Freelance',
-    food: 'Makanan',
-    transport: 'Transportasi',
-    shopping: 'Belanja',
-    utilities: 'Utilitas',
-    entertainment: 'Hiburan',
-    healthcare: 'Kesehatan',
-    education: 'Pendidikan',
-    subscription: 'Langganan',
-    investment: 'Investasi',
-    other: 'Lainnya',
+    investment: 'Investment',
+    food: 'Groceries',
+    transport: 'Transport',
+    shopping: 'Shopping',
+    utilities: 'Utilities',
+    entertainment: 'Entertainment',
+    healthcare: 'Health',
+    education: 'Education',
+    subscription: 'Subscription',
+    other: 'Others',
   };
-  return labels[category] || category;
+  return labels[category];
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: 32,
+    paddingHorizontal: 18,
+    paddingBottom: 28,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  headerTop: {
+  eyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  title: {
+    color: colors.ink,
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  profileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
+  },
+  profileText: {
+    color: colors.primary,
+    fontWeight: '900',
+  },
+  segment: {
+    flexDirection: 'row',
+    padding: 4,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+  },
+  segmentButton: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  segmentText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  segmentTextActive: {
+    color: colors.surface,
+  },
+  loadingContainer: {
+    minHeight: 360,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  balanceCard: {
+    borderRadius: radii.xl,
+    padding: 18,
+    backgroundColor: colors.primary,
+    marginBottom: 16,
+    ...shadow,
+  },
+  balanceTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  balanceLabel: {
+    color: '#ddd5ff',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  balanceAmount: {
+    color: colors.surface,
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  rankPill: {
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankText: {
+    color: colors.surface,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  balanceStats: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  miniStat: {
+    flex: 1,
+    borderRadius: radii.lg,
+    padding: 12,
+  },
+  tealSoft: {
+    backgroundColor: colors.tealSoft,
+  },
+  pinkSoft: {
+    backgroundColor: colors.pinkSoft,
+  },
+  miniStatLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 5,
+  },
+  miniStatValue: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  paydayRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: radii.lg,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    gap: 10,
+  },
+  paydayIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.yellow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paydayIconText: {
+    color: colors.ink,
+    fontWeight: '900',
+  },
+  paydayTextWrap: {
+    flex: 1,
+  },
+  paydayTitle: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  paydayText: {
+    color: '#e7e1ff',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  paydayPercent: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+  },
+  quickAction: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radii.lg,
+    paddingVertical: 13,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickIconText: {
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  quickLabel: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    marginTop: 2,
+  },
+  sectionTitle: {
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  sectionAction: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  insightGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+  },
+  insightCard: {
+    flex: 1,
+    minHeight: 142,
+    borderRadius: radii.lg,
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  insightIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  insightIconText: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  tealText: {
+    color: colors.teal,
+  },
+  pinkText: {
+    color: colors.pink,
+  },
+  insightTitle: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  insightAmount: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 5,
+  },
+  insightHelper: {
+    color: colors.faint,
+    fontSize: 11,
+    marginTop: 5,
+  },
+  overviewCard: {
+    borderRadius: radii.xl,
+    padding: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+    ...shadow,
+  },
+  overviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+  },
+  cardTitle: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  cardSubtitle: {
+    color: colors.muted,
+    fontSize: 11,
+    marginTop: 3,
+  },
+  overviewAmount: {
+    color: colors.red,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.surfaceSoft,
+    overflow: 'hidden',
+  },
+  progressTrackCompact: {
+    height: 5,
+    borderRadius: 3,
+  },
+  progressFill: {
+    height: 10,
+    borderRadius: 5,
+  },
+  progressFillCompact: {
+    height: 5,
+    borderRadius: 3,
+  },
+  categoryList: {
+    marginTop: 12,
+    gap: 12,
+  },
+  categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#9ca3af',
-  },
-  refreshButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#202024',
-    borderWidth: 1,
-    borderColor: '#303036',
-  },
-  refreshButtonText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  periodSelectorContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  periodButton: {
+  categoryLeft: {
     flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#2a2a2c',
-    borderWidth: 1,
-    borderColor: '#2a2a2c',
-  },
-  periodButtonActive: {
-    backgroundColor: '#c9152a',
-    borderColor: '#c9152a',
-  },
-  periodButtonText: {
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9ca3af',
-  },
-  periodButtonTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  loadingContainer: {
-    paddingVertical: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summaryGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    marginBottom: 20,
+    alignItems: 'center',
     gap: 10,
   },
-  summaryCard: {
-    width: '48.5%',
-    minHeight: 92,
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 9,
-    backgroundColor: '#2a2a2e',
-  },
-  summaryCardTitle: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginBottom: 8,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  summaryCardAmount: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  metricCard: {
-    backgroundColor: '#20242d',
-  },
-  metricValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  chartSection: {
-    marginHorizontal: 16,
-    marginBottom: 20,
-    padding: 14,
-    borderRadius: 9,
-    backgroundColor: '#1b1b1f',
-    borderWidth: 1,
-    borderColor: '#2a2a2c',
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  categoryDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.orangeSoft,
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'center',
   },
-  chartHint: {
-    fontSize: 11,
-    color: '#9ca3af',
+  categoryDotText: {
+    color: colors.orange,
+    fontWeight: '900',
   },
-  chartContainer: {
-    height: 120,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 5,
-    paddingTop: 8,
-  },
-  chartColumn: {
+  categoryCopy: {
     flex: 1,
-    alignItems: 'center',
-  },
-  chartBars: {
-    height: 90,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  chartBar: {
-    width: 4,
-    borderRadius: 2,
-  },
-  incomeBar: {
-    backgroundColor: '#22c55e',
-  },
-  expenseBar: {
-    backgroundColor: '#ef4444',
-  },
-  chartLabel: {
-    marginTop: 6,
-    fontSize: 10,
-    color: '#9ca3af',
-  },
-  legendRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 12,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
   },
-  legendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  legendText: {
-    fontSize: 11,
-    color: '#d1d5db',
-  },
-  section: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 10,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2a2a2c',
-  },
   categoryName: {
+    color: colors.ink,
     fontSize: 13,
-    color: '#e5e7eb',
+    fontWeight: '800',
   },
   categoryAmount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#f87171',
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: '900',
   },
-  statsGrid: {
+  mutedText: {
+    color: colors.muted,
+    fontSize: 12,
+  },
+  goalCard: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
+    borderRadius: radii.xl,
+    padding: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 14,
   },
-  statCard: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: '#2a2a2c',
+  goalBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.tealSoft,
     alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginBottom: 6,
-    fontWeight: '600',
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  emptyContainer: {
-    paddingVertical: 60,
     justifyContent: 'center',
-    alignItems: 'center',
+  },
+  goalBadgeText: {
+    color: colors.teal,
+    fontWeight: '900',
+  },
+  goalMain: {
+    flex: 1,
+  },
+  goalTitle: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  goalTarget: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 3,
+    marginBottom: 10,
+  },
+  goalFooter: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  goalCurrent: {
+    color: colors.teal,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  goalNeed: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  saveCard: {
+    borderRadius: radii.xl,
+    padding: 16,
+    backgroundColor: colors.primaryDark,
+    marginBottom: 18,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+  saveLabel: {
+    color: colors.yellow,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  saveTitle: {
+    color: colors.surface,
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 5,
+  },
+  saveText: {
+    color: '#dad3ff',
+    fontSize: 11,
+    marginTop: 4,
+    maxWidth: 170,
+  },
+  saveAmountWrap: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  saveAmount: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  saveRate: {
+    marginTop: 5,
+    color: colors.teal,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  recentCard: {
+    borderRadius: radii.xl,
+    padding: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 14,
+  },
+  emptyCard: {
+    marginTop: 40,
+    borderRadius: radii.xl,
+    padding: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emptyTitle: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 8,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#9b8c86',
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
     marginBottom: 16,
   },
-  emptyButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: '#c9152a',
-    borderRadius: 8,
+  primaryButton: {
+    minHeight: 46,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  emptyButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
+  primaryButtonText: {
+    color: colors.surface,
+    fontWeight: '900',
   },
 });

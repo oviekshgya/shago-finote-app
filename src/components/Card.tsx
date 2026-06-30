@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
+import {colors, radii} from '../theme/finoteTheme';
 
 interface CardProps {
   children: React.ReactNode;
@@ -19,21 +20,21 @@ const styles = StyleSheet.create({
   card: {
     padding: 14,
     marginBottom: 10,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
   },
   default: {
-    backgroundColor: '#1b1b1f',
-    borderColor: '#2a2a2c',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   },
   primary: {
-    backgroundColor: '#202024',
-    borderColor: '#303036',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.border,
   },
   accent: {
-    backgroundColor: '#2a1b1b',
-    borderColor: '#334155',
+    backgroundColor: colors.tealSoft,
+    borderColor: colors.border,
   },
 });

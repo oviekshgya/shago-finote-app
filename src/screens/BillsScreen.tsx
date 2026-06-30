@@ -18,6 +18,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {FinancialStorage} from '../storage/FinancialStorage';
 import type {DueDate} from '../types/FinancialTransaction';
 import {formatCurrency, formatTransactionDate} from '../utils/TransactionUtils';
+import {colors, radii, shadow} from '../theme/finoteTheme';
 
 export default function BillsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
@@ -106,21 +107,22 @@ export default function BillsScreen(): React.JSX.Element {
 
   return (
     <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
-      <StatusBar barStyle="light-content" backgroundColor="#111113" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.title}>Tagihan</Text>
+          <Text style={styles.eyebrow}>Goals</Text>
+          <Text style={styles.title}>Bills & targets</Text>
           <Text style={styles.subtitle}>Catat pembayaran keluar dan tanggal jatuh tempo.</Text>
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Tambah Tagihan</Text>
+          <Text style={styles.sectionTitle}>New payment goal</Text>
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
             placeholder="Nama tagihan, misal Internet Rumah"
-            placeholderTextColor="#737373"
+            placeholderTextColor={colors.faint}
           />
           <TextInput
             style={styles.input}
@@ -128,7 +130,7 @@ export default function BillsScreen(): React.JSX.Element {
             onChangeText={value => setAmount(formatRupiahInput(value))}
             keyboardType="numeric"
             placeholder="Rp 250.000"
-            placeholderTextColor="#737373"
+            placeholderTextColor={colors.faint}
           />
           <Text style={styles.inputLabel}>Tanggal jatuh tempo</Text>
           <View style={styles.dateRow}>
@@ -138,7 +140,7 @@ export default function BillsScreen(): React.JSX.Element {
               onChangeText={setDueDay}
               keyboardType="numeric"
               placeholder="Tanggal"
-              placeholderTextColor="#737373"
+              placeholderTextColor={colors.faint}
               maxLength={2}
             />
             <TextInput
@@ -147,7 +149,7 @@ export default function BillsScreen(): React.JSX.Element {
               onChangeText={setDueMonth}
               keyboardType="numeric"
               placeholder="Bulan"
-              placeholderTextColor="#737373"
+              placeholderTextColor={colors.faint}
               maxLength={2}
             />
           </View>
@@ -157,7 +159,7 @@ export default function BillsScreen(): React.JSX.Element {
             onChangeText={setInstallmentCount}
             keyboardType="numeric"
             placeholder="Jumlah cicilan/tagihan, contoh 12"
-            placeholderTextColor="#737373"
+            placeholderTextColor={colors.faint}
           />
           <Pressable
             style={[styles.toggleRow, isRecurring && styles.toggleRowActive]}
@@ -170,7 +172,7 @@ export default function BillsScreen(): React.JSX.Element {
           </Pressable>
         </View>
 
-        <Text style={styles.sectionTitle}>Daftar Tagihan</Text>
+        <Text style={styles.sectionTitle}>Upcoming</Text>
         {items.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Belum ada tagihan</Text>
@@ -244,53 +246,60 @@ function formatRupiahInput(value: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
+    padding: 18,
     paddingBottom: 32,
   },
   header: {
     marginBottom: 18,
   },
+  eyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 27,
+    fontWeight: '900',
+    color: colors.ink,
   },
   subtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: '#9ca3af',
+    color: colors.muted,
   },
   formCard: {
-    padding: 14,
+    padding: 16,
     marginBottom: 20,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
+    ...shadow,
   },
   sectionTitle: {
     marginBottom: 12,
     fontSize: 15,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.ink,
   },
   input: {
     minHeight: 46,
     marginBottom: 10,
-    borderRadius: 8,
-    backgroundColor: '#202024',
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     paddingHorizontal: 12,
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 14,
   },
   inputLabel: {
     marginBottom: 8,
-    color: '#f3f4f6',
+    color: colors.ink,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -305,53 +314,53 @@ const styles = StyleSheet.create({
     minHeight: 46,
     marginBottom: 12,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#242428',
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   toggleRowActive: {
-    borderColor: '#22c55e',
-    backgroundColor: '#1f3d2a',
+    borderColor: colors.teal,
+    backgroundColor: colors.tealSoft,
   },
   toggleText: {
-    color: '#f3f4f6',
+    color: colors.ink,
     fontSize: 13,
     fontWeight: '600',
   },
   toggleValue: {
-    color: '#86efac',
+    color: colors.teal,
     fontSize: 12,
     fontWeight: '800',
   },
   saveButton: {
     minHeight: 46,
-    borderRadius: 8,
-    backgroundColor: '#c9152a',
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveButtonText: {
-    color: '#ffffff',
-    fontWeight: '800',
+    color: colors.surface,
+    fontWeight: '900',
   },
   emptyCard: {
     padding: 18,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
   },
   emptyTitle: {
-    color: '#ffffff',
+    color: colors.ink,
     fontWeight: '800',
     marginBottom: 6,
   },
   emptyText: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 13,
   },
   billItem: {
@@ -360,26 +369,26 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 14,
     marginBottom: 10,
-    borderRadius: 10,
-    backgroundColor: '#1b1b1f',
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
   },
   billInfo: {
     flex: 1,
   },
   billTitle: {
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 4,
   },
   billMeta: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 12,
   },
   billRepeat: {
-    color: '#86efac',
+    color: colors.teal,
     fontSize: 11,
     marginTop: 4,
   },
@@ -387,28 +396,28 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   billAmount: {
-    color: '#ffffff',
+    color: colors.ink,
     fontSize: 13,
     fontWeight: '800',
     marginBottom: 4,
   },
   billStatus: {
-    color: '#9ca3af',
+    color: colors.muted,
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 8,
   },
   billStatusOverdue: {
-    color: '#f87171',
+    color: colors.red,
   },
   paidButton: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 7,
-    backgroundColor: '#14532d',
+    backgroundColor: colors.tealSoft,
   },
   paidButtonText: {
-    color: '#86efac',
+    color: colors.teal,
     fontSize: 11,
     fontWeight: '800',
   },

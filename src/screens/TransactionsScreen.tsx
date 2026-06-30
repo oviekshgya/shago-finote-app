@@ -1,33 +1,35 @@
-/**
- * Transactions Screen
- * List, search, dan filter transaksi
- */
-
-import React, { useState } from 'react';
+import React, {useMemo, useState} from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  StatusBar,
-  TextInput,
-  Pressable,
   ActivityIndicator,
+  FlatList,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTransactions } from '../hooks/useTransactions';
-import { formatCurrency, formatTransactionDate, groupTransactionsByDate } from '../utils/TransactionUtils';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useTransactions} from '../hooks/useTransactions';
+import type {FinancialTransaction} from '../types/FinancialTransaction';
+import {
+  formatCurrency,
+  formatTransactionDate,
+  groupTransactionsByDate,
+} from '../utils/TransactionUtils';
+import {colors, radii, shadow} from '../theme/finoteTheme';
 
 export default function TransactionsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const { transactions, loading } = useTransactions();
+  const {transactions, loading} = useTransactions();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
 
-  // Group transactions by date
   const filtered = transactions
     .filter(t => {
-      if (filterType !== 'all' && t.type !== filterType) return false;
+      if (filterType !== 'all' && t.type !== filterType) {
+        return false;
+      }
       if (search.trim()) {
         const query = search.toLowerCase();
         return (
@@ -39,28 +41,46 @@ export default function TransactionsScreen(): React.JSX.Element {
     })
     .sort((a, b) => b.date - a.date);
 
-  const grouped = groupTransactionsByDate(filtered);
-  const sections = Object.entries(grouped).map(([date, items]) => ({
+  const totals = useMemo(() => {
+    return filtered.reduce(
+      (acc, item) => {
+        if (item.type === 'income') {
+          acc.income += item.amount;
+        }
+        if (item.type === 'expense') {
+          acc.expense += item.amount;
+        }
+        return acc;
+      },
+      {income: 0, expense: 0},
+    );
+  }, [filtered]);
+
+  const sections = Object.entries(groupTransactionsByDate(filtered)).map(([date, items]) => ({
     date,
     items,
   }));
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a1c" />
+    <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Transaksi</Text>
+        <Text style={styles.eyebrow}>Insights</Text>
+        <Text style={styles.title}>Spending details</Text>
         <Text style={styles.subtitle}>{filtered.length} transaksi ditemukan</Text>
       </View>
 
-      {/* Search & Filter */}
+      <View style={styles.summaryRow}>
+        <SummaryPill label="Income" value={formatCurrency(totals.income)} tone="teal" />
+        <SummaryPill label="Expense" value={formatCurrency(totals.expense)} tone="pink" />
+      </View>
+
       <View style={styles.controlsContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Cari transaksi, merchant..."
-          placeholderTextColor="#9ca3af"
+          placeholder="Search transactions"
+          placeholderTextColor={colors.faint}
           value={search}
           onChangeText={setSearch}
         />
@@ -76,54 +96,85 @@ export default function TransactionsScreen(): React.JSX.Element {
                   styles.filterButtonText,
                   filterType === type && styles.filterButtonTextActive,
                 ]}>
-                {type === 'all' ? 'Semua' : type === 'income' ? 'Masuk' : 'Keluar'}
+                {type === 'all' ? 'All' : type === 'income' ? 'Income' : 'Expense'}
               </Text>
             </Pressable>
           ))}
         </View>
       </View>
 
-      {/* Transactions List */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#c9152a" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : sections.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Tidak ada transaksi</Text>
+          <Text style={styles.emptyTitle}>No transactions yet</Text>
+          <Text style={styles.emptyText}>Data transaksi akan muncul setelah dicatat manual atau ditangkap dari notifikasi.</Text>
         </View>
       ) : (
         <FlatList
           data={sections}
           keyExtractor={item => item.date}
-          renderItem={({ item: section }) => (
-            <View key={section.date}>
+          renderItem={({item: section}) => (
+            <View>
               <Text style={styles.dateHeader}>{formatDateHeader(section.date)}</Text>
-              {section.items.map(transaction => (
-                <TransactionItem key={transaction.id} transaction={transaction} />
-              ))}
+              <View style={styles.sectionCard}>
+                {section.items.map(transaction => (
+                  <TransactionItem key={transaction.id} transaction={transaction} />
+                ))}
+              </View>
             </View>
           )}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
   );
 }
 
-function TransactionItem({ transaction }: any) {
+function SummaryPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: 'teal' | 'pink';
+}) {
+  return (
+    <View style={styles.summaryPill}>
+      <View style={[styles.summaryIcon, tone === 'teal' ? styles.tealSoft : styles.pinkSoft]}>
+        <Text style={[styles.summaryIconText, tone === 'teal' ? styles.tealText : styles.pinkText]}>
+          {tone === 'teal' ? '+' : '-'}
+        </Text>
+      </View>
+      <View style={styles.summaryCopy}>
+        <Text style={styles.summaryLabel}>{label}</Text>
+        <Text style={styles.summaryValue} numberOfLines={1}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function TransactionItem({transaction}: {transaction: FinancialTransaction}) {
   const isIncome = transaction.type === 'income';
-  const amountColor = isIncome ? '#4ade80' : '#f87171';
+  const amountColor = isIncome ? colors.teal : colors.red;
+  const initial = (transaction.merchant || transaction.description || '?').slice(0, 1).toUpperCase();
 
   return (
     <Pressable style={styles.transactionItem}>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{initial}</Text>
+      </View>
       <View style={styles.transactionInfo}>
         <Text style={styles.transactionDesc} numberOfLines={1}>
           {transaction.description}
         </Text>
         <Text style={styles.transactionTime}>{formatTransactionDate(transaction.date)}</Text>
       </View>
-      <Text style={[styles.transactionAmount, { color: amountColor }]}>
+      <Text style={[styles.transactionAmount, {color: amountColor}]} numberOfLines={1}>
         {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
       </Text>
     </Pressable>
@@ -137,9 +188,10 @@ function formatDateHeader(dateStr: string): string {
   yesterday.setDate(yesterday.getDate() - 1);
 
   if (date.toDateString() === today.toDateString()) {
-    return 'Hari Ini';
-  } else if (date.toDateString() === yesterday.toDateString()) {
-    return 'Kemarin';
+    return 'Today';
+  }
+  if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
   }
 
   return date.toLocaleDateString('id-ID', {
@@ -153,37 +205,98 @@ function formatDateHeader(dateStr: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
+    backgroundColor: colors.background,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 18,
+    paddingTop: 8,
     paddingBottom: 12,
   },
+  eyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 27,
+    fontWeight: '900',
+    color: colors.ink,
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 12,
-    color: '#9ca3af',
+    fontSize: 13,
+    color: colors.muted,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 18,
+    marginBottom: 14,
+  },
+  summaryPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: radii.lg,
+    padding: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
+  },
+  summaryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryIconText: {
+    fontWeight: '900',
+    fontSize: 20,
+  },
+  summaryCopy: {
+    flex: 1,
+  },
+  summaryLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  summaryValue: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  tealSoft: {
+    backgroundColor: colors.tealSoft,
+  },
+  pinkSoft: {
+    backgroundColor: colors.pinkSoft,
+  },
+  tealText: {
+    color: colors.teal,
+  },
+  pinkText: {
+    color: colors.pink,
   },
   controlsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: 18,
+    marginBottom: 10,
   },
   searchInput: {
-    backgroundColor: '#2a2a2c',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    color: '#ffffff',
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    color: colors.ink,
     marginBottom: 12,
-    fontSize: 13,
+    fontSize: 14,
     borderWidth: 1,
-    borderColor: '#303036',
+    borderColor: colors.border,
   },
   filterButtons: {
     flexDirection: 'row',
@@ -191,26 +304,25 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 8,
-    borderRadius: 7,
-    backgroundColor: '#2a2a2c',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a2c',
+    borderColor: colors.border,
   },
   filterButtonActive: {
-    backgroundColor: '#c9152a',
-    borderColor: '#c9152a',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterButtonText: {
     textAlign: 'center',
     fontSize: 12,
-    fontWeight: '600',
-    color: '#9ca3af',
+    fontWeight: '800',
+    color: colors.muted,
   },
   filterButtonTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
+    color: colors.surface,
   },
   centerContainer: {
     flex: 1,
@@ -218,55 +330,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
+    margin: 18,
+    padding: 18,
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emptyTitle: {
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 6,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 19,
   },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingBottom: 24,
   },
   dateHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#9ca3af',
-    marginTop: 16,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.muted,
+    marginTop: 14,
+    marginBottom: 9,
+  },
+  sectionCard: {
+    borderRadius: radii.xl,
+    paddingHorizontal: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   transactionItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 11,
+    paddingVertical: 13,
+    gap: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1f1f23',
+    borderBottomColor: colors.border,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: colors.primary,
+    fontWeight: '900',
   },
   transactionInfo: {
     flex: 1,
   },
   transactionDesc: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.ink,
     marginBottom: 4,
   },
   transactionTime: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: colors.muted,
   },
   transactionAmount: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginLeft: 12,
-    minWidth: 80,
+    maxWidth: 120,
+    fontSize: 12,
+    fontWeight: '900',
     textAlign: 'right',
   },
 });

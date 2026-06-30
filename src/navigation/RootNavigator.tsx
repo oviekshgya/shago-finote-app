@@ -16,6 +16,7 @@ import AddTransactionScreen from '../screens/AddTransactionScreen';
 import BillsScreen from '../screens/BillsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
+import {colors, shadow} from '../theme/finoteTheme';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -37,12 +38,12 @@ function DashboardStack() {
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#1a1a1c',
+          backgroundColor: colors.background,
           borderBottomWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
         },
-        headerTintColor: '#ffffff',
+        headerTintColor: colors.ink,
         headerTitleStyle: {
           fontWeight: '600',
           fontSize: 16,
@@ -69,10 +70,10 @@ function TransactionsStack() {
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#1a1a1c',
+          backgroundColor: colors.background,
           borderBottomWidth: 0,
         },
-        headerTintColor: '#ffffff',
+        headerTintColor: colors.ink,
         headerTitleStyle: {
           fontWeight: '600',
           fontSize: 16,
@@ -106,9 +107,9 @@ function AddStack() {
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#1a1a1c',
+          backgroundColor: colors.background,
         },
-        headerTintColor: '#ffffff',
+        headerTintColor: colors.ink,
       }}>
       <Stack.Screen
         name="AddMain"
@@ -130,9 +131,9 @@ function BillsStack() {
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#1a1a1c',
+          backgroundColor: colors.background,
         },
-        headerTintColor: '#ffffff',
+        headerTintColor: colors.ink,
       }}>
       <Stack.Screen
         name="BillsMain"
@@ -154,9 +155,9 @@ function SettingsStack() {
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#1a1a1c',
+          backgroundColor: colors.background,
         },
-        headerTintColor: '#ffffff',
+        headerTintColor: colors.ink,
       }}>
       <Stack.Screen
         name="SettingsMain"
@@ -177,22 +178,24 @@ export default function RootNavigator() {
   return (
     <NavigationContainer>
       <Tab.Navigator
-        screenOptions={({route}) => ({
+        screenOptions={() => ({
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: '#1a1a1c',
-            borderTopColor: '#2a2a2c',
+            backgroundColor: colors.tab,
+            borderTopColor: colors.border,
             borderTopWidth: 1,
-            height: 60,
-            paddingBottom: 8,
+            height: 66,
+            paddingBottom: 9,
+            paddingTop: 7,
+            ...shadow,
           },
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: '500',
             marginBottom: 4,
           },
-          tabBarActiveTintColor: '#c9152a',
-          tabBarInactiveTintColor: '#8a8a8e',
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.faint,
           tabBarShowLabel: true,
         })}>
         <Tab.Screen
@@ -200,8 +203,8 @@ export default function RootNavigator() {
           component={DashboardStack}
           options={{
             title: 'Dashboard',
-            tabBarLabel: 'Dashboard',
-            tabBarIcon: ({focused}) => <TabIcon name="📊" focused={focused} />,
+            tabBarLabel: 'Home',
+            tabBarIcon: ({focused}) => <TabIcon name="⌂" focused={focused} />,
           }}
         />
 
@@ -210,8 +213,8 @@ export default function RootNavigator() {
           component={TransactionsStack}
           options={{
             title: 'Transaksi',
-            tabBarLabel: 'Transaksi',
-            tabBarIcon: ({focused}) => <TabIcon name="📋" focused={focused} />,
+            tabBarLabel: 'Insights',
+            tabBarIcon: ({focused}) => <TabIcon name="⌁" focused={focused} />,
           }}
         />
 
@@ -238,8 +241,8 @@ export default function RootNavigator() {
           component={BillsStack}
           options={{
             title: 'Tagihan',
-            tabBarLabel: 'Tagihan',
-            tabBarIcon: ({focused}) => <TabIcon name="📅" focused={focused} />,
+            tabBarLabel: 'Goals',
+            tabBarIcon: ({focused}) => <TabIcon name="◎" focused={focused} />,
           }}
         />
 
@@ -248,8 +251,8 @@ export default function RootNavigator() {
           component={SettingsStack}
           options={{
             title: 'Pengaturan',
-            tabBarLabel: 'Pengaturan',
-            tabBarIcon: ({focused}) => <TabIcon name="⚙️" focused={focused} />,
+            tabBarLabel: 'Help',
+            tabBarIcon: ({focused}) => <TabIcon name="?" focused={focused} />,
           }}
         />
       </Tab.Navigator>
@@ -265,35 +268,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabIconActive: {
-    backgroundColor: '#2a1b20',
+    backgroundColor: colors.primarySoft,
     borderRadius: 16,
   },
   tabIconText: {
-    fontSize: 20,
+    fontSize: 19,
+    color: colors.faint,
+    fontWeight: '900',
   },
   tabIconTextActive: {
-    fontSize: 22,
+    fontSize: 20,
+    color: colors.primary,
   },
   addButtonCircle: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#c9152a',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
-    shadowColor: '#000',
+    shadowColor: colors.primary,
     shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   addButtonCircleActive: {
-    backgroundColor: '#e01e3e',
+    backgroundColor: colors.primaryDark,
   },
   addButtonText: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: colors.surface,
   },
 });

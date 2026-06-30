@@ -6,13 +6,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {colors} from '../theme/finoteTheme';
 
 export default function TransactionDetailScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a1c" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <View style={styles.header}>
         <Text style={styles.title}>Detail Transaksi</Text>
       </View>
@@ -26,7 +27,7 @@ export default function TransactionDetailScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111113',
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: 16,
@@ -35,7 +36,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#ffffff',
+    color: colors.ink,
   },
   content: {
     flex: 1,
@@ -43,6 +44,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   placeholder: {
-    color: '#9b8c86',
+    color: colors.muted,
   },
 });
