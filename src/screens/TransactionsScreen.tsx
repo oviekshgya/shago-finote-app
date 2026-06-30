@@ -1,6 +1,7 @@
 import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -23,7 +24,7 @@ import {colors, radii, shadow} from '../theme/finoteTheme';
 
 export default function TransactionsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const {transactions, loading} = useTransactions();
+  const {transactions, loading, deleteTransaction} = useTransactions();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
@@ -63,6 +64,30 @@ export default function TransactionsScreen(): React.JSX.Element {
     date,
     items,
   }));
+
+  const confirmDelete = (transaction: FinancialTransaction) => {
+    Alert.alert(
+      'Hapus transaksi?',
+      `${transaction.description}\n${formatCurrency(transaction.amount)}`,
+      [
+        {text: 'Batal', style: 'cancel'},
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTransaction(transaction.id);
+              if (selectedTransaction?.id === transaction.id) {
+                setSelectedTransaction(null);
+              }
+            } catch (error) {
+              Alert.alert('Gagal menghapus transaksi', String(error));
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
@@ -128,6 +153,7 @@ export default function TransactionsScreen(): React.JSX.Element {
                     key={transaction.id}
                     transaction={transaction}
                     onPress={() => setSelectedTransaction(transaction)}
+                    onDelete={() => confirmDelete(transaction)}
                   />
                 ))}
               </View>
@@ -173,9 +199,11 @@ function SummaryPill({
 function TransactionItem({
   transaction,
   onPress,
+  onDelete,
 }: {
   transaction: FinancialTransaction;
   onPress(): void;
+  onDelete(): void;
 }) {
   const isIncome = transaction.type === 'income';
   const amountColor = isIncome ? colors.teal : colors.red;
@@ -195,6 +223,14 @@ function TransactionItem({
       <Text style={[styles.transactionAmount, {color: amountColor}]} numberOfLines={1}>
         {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
       </Text>
+      <Pressable
+        style={styles.deleteButton}
+        onPress={event => {
+          event.stopPropagation();
+          onDelete();
+        }}>
+        <Text style={styles.deleteButtonText}>Hapus</Text>
+      </Pressable>
     </Pressable>
   );
 }
@@ -472,10 +508,23 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   transactionAmount: {
-    maxWidth: 120,
+    maxWidth: 104,
     fontSize: 12,
     fontWeight: '900',
     textAlign: 'right',
+  },
+  deleteButton: {
+    minHeight: 30,
+    paddingHorizontal: 10,
+    borderRadius: radii.md,
+    backgroundColor: colors.redSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    color: colors.red,
+    fontSize: 11,
+    fontWeight: '900',
   },
   modalBackdrop: {
     flex: 1,
