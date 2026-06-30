@@ -2,7 +2,9 @@ import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -24,6 +26,7 @@ export default function TransactionsScreen(): React.JSX.Element {
   const {transactions, loading} = useTransactions();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
 
   const filtered = transactions
     .filter(t => {
@@ -121,7 +124,11 @@ export default function TransactionsScreen(): React.JSX.Element {
               <Text style={styles.dateHeader}>{formatDateHeader(section.date)}</Text>
               <View style={styles.sectionCard}>
                 {section.items.map(transaction => (
-                  <TransactionItem key={transaction.id} transaction={transaction} />
+                  <TransactionItem
+                    key={transaction.id}
+                    transaction={transaction}
+                    onPress={() => setSelectedTransaction(transaction)}
+                  />
                 ))}
               </View>
             </View>
@@ -130,6 +137,11 @@ export default function TransactionsScreen(): React.JSX.Element {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      <TransactionDetailModal
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+      />
     </View>
   );
 }
@@ -158,13 +170,19 @@ function SummaryPill({
   );
 }
 
-function TransactionItem({transaction}: {transaction: FinancialTransaction}) {
+function TransactionItem({
+  transaction,
+  onPress,
+}: {
+  transaction: FinancialTransaction;
+  onPress(): void;
+}) {
   const isIncome = transaction.type === 'income';
   const amountColor = isIncome ? colors.teal : colors.red;
   const initial = (transaction.merchant || transaction.description || '?').slice(0, 1).toUpperCase();
 
   return (
-    <Pressable style={styles.transactionItem}>
+    <Pressable style={styles.transactionItem} onPress={onPress}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{initial}</Text>
       </View>
@@ -178,6 +196,60 @@ function TransactionItem({transaction}: {transaction: FinancialTransaction}) {
         {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
       </Text>
     </Pressable>
+  );
+}
+
+function TransactionDetailModal({
+  transaction,
+  onClose,
+}: {
+  transaction: FinancialTransaction | null;
+  onClose(): void;
+}) {
+  const isIncome = transaction?.type === 'income';
+  const amountColor = isIncome ? colors.teal : colors.red;
+
+  return (
+    <Modal visible={Boolean(transaction)} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Text style={styles.modalEyebrow}>Transaction detail</Text>
+            <Text style={styles.modalTitle}>{transaction?.description || '-'}</Text>
+            <Text style={[styles.modalAmount, {color: amountColor}]}>
+              {transaction ? `${isIncome ? '+' : '-'} ${formatCurrency(transaction.amount)}` : '-'}
+            </Text>
+
+            <View style={styles.detailCard}>
+              <DetailRow label="Tipe" value={transaction?.type ?? '-'} />
+              <DetailRow label="Status" value={transaction?.status ?? '-'} />
+              <DetailRow label="Kategori" value={transaction?.category ?? '-'} />
+              <DetailRow label="Tanggal transaksi" value={transaction ? formatTransactionDate(transaction.date) : '-'} />
+              <DetailRow label="Merchant" value={transaction?.merchant ?? '-'} />
+              <DetailRow label="Sumber" value={transaction?.sourceApp ?? transaction?.sourceType ?? '-'} />
+              <DetailRow label="Referensi" value={transaction?.reference ?? '-'} />
+              <DetailRow label="Sync" value={transaction?.syncStatus ?? '-'} />
+              <DetailRow label="Dibuat" value={transaction ? formatTransactionDate(transaction.createdAt) : '-'} />
+              <DetailRow label="Diupdate" value={transaction ? formatTransactionDate(transaction.updatedAt) : '-'} />
+            </View>
+          </ScrollView>
+
+          <Pressable style={styles.modalCloseButton} onPress={onClose}>
+            <Text style={styles.modalCloseText}>Tutup</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function DetailRow({label, value}: {label: string; value: string}) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue} numberOfLines={2}>{value}</Text>
+    </View>
   );
 }
 
@@ -404,5 +476,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     textAlign: 'right',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(25,21,45,0.38)',
+  },
+  modalSheet: {
+    maxHeight: '86%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: colors.surface,
+    padding: 18,
+    paddingBottom: 24,
+  },
+  modalHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalEyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  modalTitle: {
+    color: colors.ink,
+    fontSize: 21,
+    fontWeight: '900',
+  },
+  modalAmount: {
+    marginTop: 10,
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  detailCard: {
+    marginTop: 16,
+    borderRadius: radii.xl,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+  },
+  detailRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  detailLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  detailValue: {
+    flex: 1,
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+  modalCloseButton: {
+    minHeight: 48,
+    marginTop: 16,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    color: colors.surface,
+    fontSize: 14,
+    fontWeight: '900',
   },
 });

@@ -72,13 +72,6 @@ export default function DashboardScreen(): React.JSX.Element {
           <>
             <BalanceCard summary={summary} budgetUsed={budgetUsed} />
 
-            <View style={styles.quickGrid}>
-              <QuickAction icon="+" label="Catat" onPress={() => navigation.navigate('Add')} />
-              <QuickAction icon="↑" label="Upload" />
-              <QuickAction icon="●" label="Voice" />
-              <QuickAction icon="?" label="Help" />
-            </View>
-
             <SectionHeader title="Insights" action="This month" />
             <View style={styles.insightGrid}>
               <InsightCard
@@ -166,7 +159,7 @@ function BalanceCard({
   summary: FinancialSummary;
   budgetUsed: number;
 }) {
-  const balance = Math.max(summary.netCashFlow, 0);
+  const balance = summary.netCashFlow;
   const paydayDate = new Date();
   paydayDate.setMonth(paydayDate.getMonth() + 1, 25);
   const daysToPayday = Math.max(
@@ -219,17 +212,6 @@ function MiniStat({
       <Text style={styles.miniStatLabel}>{label}</Text>
       <Text style={styles.miniStatValue} numberOfLines={1}>{value}</Text>
     </View>
-  );
-}
-
-function QuickAction({icon, label, onPress}: {icon: string; label: string; onPress?: () => void}) {
-  return (
-    <Pressable style={styles.quickAction} onPress={onPress}>
-      <View style={styles.quickIcon}>
-        <Text style={styles.quickIconText}>{icon}</Text>
-      </View>
-      <Text style={styles.quickLabel}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -603,39 +585,6 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: 13,
     fontWeight: '900',
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: radii.lg,
-    paddingVertical: 13,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickIconText: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  quickLabel: {
-    color: colors.ink,
-    fontSize: 11,
-    fontWeight: '800',
   },
   sectionHeader: {
     flexDirection: 'row',

@@ -6,6 +6,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -25,8 +26,9 @@ export default function BillsScreen(): React.JSX.Element {
   const [items, setItems] = useState<DueDate[]>([]);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [dueDay, setDueDay] = useState(String(new Date().getDate()));
-  const [dueMonth, setDueMonth] = useState(String(new Date().getMonth() + 1));
+  const [dueDate, setDueDate] = useState(startOfTodayAtNine());
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(startOfMonth(startOfTodayAtNine()));
   const [installmentCount, setInstallmentCount] = useState('1');
   const [isRecurring, setIsRecurring] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -42,8 +44,6 @@ export default function BillsScreen(): React.JSX.Element {
 
   const saveBill = async () => {
     const numericAmount = Number(amount.replace(/[^\d]/g, ''));
-    const day = clampNumber(Number(dueDay.replace(/[^\d]/g, '')), 1, 31);
-    const month = clampNumber(Number(dueMonth.replace(/[^\d]/g, '')), 1, 12);
     const totalInstallments = clampNumber(Number(installmentCount.replace(/[^\d]/g, '')), 1, 60);
     if (!title.trim()) {
       Alert.alert('Nama tagihan wajib diisi');
@@ -57,13 +57,13 @@ export default function BillsScreen(): React.JSX.Element {
     const now = Date.now();
     const parentId = `bill-${now}`;
     const bills = Array.from({length: totalInstallments}, (_, index): DueDate => {
-      const dueDate = buildDueDate(day, month, index);
+      const noteDueDate = buildDueDate(dueDate, index);
       return {
         id: totalInstallments === 1 ? parentId : `${parentId}-${index + 1}`,
         title: totalInstallments === 1 ? title.trim() : `${title.trim()} (${index + 1}/${totalInstallments})`,
         amount: numericAmount,
         currency: 'IDR',
-        dueDate,
+        dueDate: noteDueDate,
         category: 'utilities',
         isRecurring,
         recurringInterval: isRecurring || totalInstallments > 1 ? 'monthly' : undefined,
@@ -84,8 +84,8 @@ export default function BillsScreen(): React.JSX.Element {
       }
       setTitle('');
       setAmount('');
-      setDueDay(String(new Date().getDate()));
-      setDueMonth(String(new Date().getMonth() + 1));
+      setDueDate(startOfTodayAtNine());
+      setPickerMonth(startOfMonth(startOfTodayAtNine()));
       setInstallmentCount('1');
       setIsRecurring(false);
       await loadItems();
@@ -133,26 +133,10 @@ export default function BillsScreen(): React.JSX.Element {
             placeholderTextColor={colors.faint}
           />
           <Text style={styles.inputLabel}>Tanggal jatuh tempo</Text>
-          <View style={styles.dateRow}>
-            <TextInput
-              style={[styles.input, styles.dateInput]}
-              value={dueDay}
-              onChangeText={setDueDay}
-              keyboardType="numeric"
-              placeholder="Tanggal"
-              placeholderTextColor={colors.faint}
-              maxLength={2}
-            />
-            <TextInput
-              style={[styles.input, styles.dateInput]}
-              value={dueMonth}
-              onChangeText={setDueMonth}
-              keyboardType="numeric"
-              placeholder="Bulan"
-              placeholderTextColor={colors.faint}
-              maxLength={2}
-            />
-          </View>
+          <Pressable style={styles.datePickerButton} onPress={() => setPickerVisible(true)}>
+            <Text style={styles.datePickerText}>{formatReadableDate(dueDate)}</Text>
+            <Text style={styles.datePickerAction}>Pilih</Text>
+          </Pressable>
           <TextInput
             style={styles.input}
             value={installmentCount}
@@ -182,6 +166,18 @@ export default function BillsScreen(): React.JSX.Element {
           items.map(item => <BillItem key={item.id} item={item} onPaid={() => markPaid(item)} />)
         )}
       </ScrollView>
+
+      <DatePickerModal
+        visible={pickerVisible}
+        month={pickerMonth}
+        selectedDate={dueDate}
+        onChangeMonth={setPickerMonth}
+        onSelect={value => {
+          setDueDate(value);
+          setPickerVisible(false);
+        }}
+        onClose={() => setPickerVisible(false)}
+      />
     </View>
   );
 }
@@ -223,16 +219,125 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function buildDueDate(day: number, month: number, monthOffset: number): number {
-  const now = new Date();
-  const year = now.getFullYear();
-  const date = new Date(year, month - 1 + monthOffset, 1, 9, 0, 0, 0);
+function buildDueDate(baseDate: number, monthOffset: number): number {
+  const source = new Date(baseDate);
+  const date = new Date(
+    source.getFullYear(),
+    source.getMonth() + monthOffset,
+    1,
+    9,
+    0,
+    0,
+    0,
+  );
   const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  date.setDate(Math.min(day, lastDay));
-  if (date.getTime() < now.getTime()) {
-    date.setMonth(date.getMonth() + 1);
-  }
+  date.setDate(Math.min(source.getDate(), lastDay));
   return date.getTime();
+}
+
+function startOfTodayAtNine(): number {
+  const date = new Date();
+  date.setHours(9, 0, 0, 0);
+  return date.getTime();
+}
+
+function startOfMonth(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setDate(1);
+  date.setHours(9, 0, 0, 0);
+  return date.getTime();
+}
+
+function addMonths(timestamp: number, offset: number): number {
+  const date = new Date(timestamp);
+  date.setMonth(date.getMonth() + offset);
+  return startOfMonth(date.getTime());
+}
+
+function sameDate(left: number, right: number): boolean {
+  const a = new Date(left);
+  const b = new Date(right);
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function formatReadableDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function DatePickerModal({
+  visible,
+  month,
+  selectedDate,
+  onChangeMonth,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  month: number;
+  selectedDate: number;
+  onChangeMonth(value: number): void;
+  onSelect(value: number): void;
+  onClose(): void;
+}) {
+  const monthDate = new Date(month);
+  const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
+  const blanks = Array.from({length: firstDay}, (_, index) => `blank-${index}`);
+  const days = Array.from({length: daysInMonth}, (_, index) => index + 1);
+  const monthLabel = monthDate.toLocaleDateString('id-ID', {month: 'long', year: 'numeric'});
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.dateModalSheet}>
+          <View style={styles.dateModalHeader}>
+            <Pressable style={styles.monthButton} onPress={() => onChangeMonth(addMonths(month, -1))}>
+              <Text style={styles.monthButtonText}>{'<'}</Text>
+            </Pressable>
+            <Text style={styles.monthTitle}>{monthLabel}</Text>
+            <Pressable style={styles.monthButton} onPress={() => onChangeMonth(addMonths(month, 1))}>
+              <Text style={styles.monthButtonText}>{'>'}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.weekRow}>
+            {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(day => (
+              <Text key={day} style={styles.weekText}>{day}</Text>
+            ))}
+          </View>
+
+          <View style={styles.daysGrid}>
+            {blanks.map(item => <View key={item} style={styles.dayCell} />)}
+            {days.map(day => {
+              const value = new Date(monthDate.getFullYear(), monthDate.getMonth(), day, 9, 0, 0, 0).getTime();
+              const selected = sameDate(value, selectedDate);
+              return (
+                <Pressable
+                  key={day}
+                  style={[styles.dayCell, selected && styles.dayCellSelected]}
+                  onPress={() => onSelect(value)}>
+                  <Text style={[styles.dayText, selected && styles.dayTextSelected]}>{day}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable style={styles.modalCloseButton} onPress={onClose}>
+            <Text style={styles.modalCloseText}>Tutup</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 function formatRupiahInput(value: string): string {
@@ -303,12 +408,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  dateRow: {
+  datePickerButton: {
+    minHeight: 48,
+    marginBottom: 10,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  dateInput: {
+  datePickerText: {
     flex: 1,
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  datePickerAction: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
   },
   toggleRow: {
     minHeight: 46,
@@ -420,5 +542,89 @@ const styles = StyleSheet.create({
     color: colors.teal,
     fontSize: 11,
     fontWeight: '800',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(25,21,45,0.38)',
+  },
+  dateModalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: colors.surface,
+    padding: 18,
+    paddingBottom: 24,
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  monthButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthButtonText: {
+    color: colors.primary,
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '900',
+  },
+  monthTitle: {
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  weekText: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.md,
+  },
+  dayCellSelected: {
+    backgroundColor: colors.primary,
+  },
+  dayText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dayTextSelected: {
+    color: colors.surface,
+    fontWeight: '900',
+  },
+  modalCloseButton: {
+    minHeight: 48,
+    marginTop: 16,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    color: colors.surface,
+    fontSize: 14,
+    fontWeight: '900',
   },
 });

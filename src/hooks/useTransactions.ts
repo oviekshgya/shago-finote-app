@@ -3,7 +3,7 @@
  */
 
 import {DeviceEventEmitter} from 'react-native';
-import { useCallback, useEffect, useState } from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import type { FinancialTransaction, FinancialSummary } from '../types/FinancialTransaction';
 import { FinancialStorage } from '../storage/FinancialStorage';
 import NotificationModule from '../native/NotificationModule';
@@ -140,14 +140,18 @@ export function useFinancialSummary(period: 'today' | 'week' | 'month' | 'all' =
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedRef.current) {
+      setLoading(true);
+    }
     setError(null);
     try {
       await TransactionCaptureService.syncFromNotificationModule(NotificationModule);
       const data = await FinancialStorage.calculateFinancialSummary(period);
       setSummary(data);
+      hasLoadedRef.current = true;
     } catch (err) {
       setError(`Failed to fetch summary: ${err}`);
     } finally {
@@ -156,6 +160,8 @@ export function useFinancialSummary(period: 'today' | 'week' | 'month' | 'all' =
   }, [period]);
 
   useEffect(() => {
+    hasLoadedRef.current = false;
+    setLoading(true);
     refresh();
     const subscription = DeviceEventEmitter.addListener('transactionsUpdated', refresh);
     const timer = setInterval(() => {
