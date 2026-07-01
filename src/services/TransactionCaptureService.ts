@@ -265,13 +265,13 @@ export class TransactionCaptureService {
       };
     }
 
-    const amount = this.extractRupiahAmount(text);
+    const amount = this.extractCurrencyAmount(text);
     if (!amount) {
       return {
         success: false,
         confidence: 0,
         ruleName: `user-rule:${rule.packageName}`,
-        error: `No Rupiah amount found for ${rule.appLabel}`,
+        error: `No supported currency amount found for ${rule.appLabel}`,
       };
     }
 
@@ -329,25 +329,49 @@ export class TransactionCaptureService {
       .some(prefix => text.includes(prefix));
   }
 
-  private static extractRupiahAmount(text: string): number | null {
-    const matches = text.match(/(?:rp|idr)\s*[\d.]+(?:,\d{1,2})?|[\d.]+(?:,\d{1,2})?\s*(?:rp|idr)/gi);
+  private static extractCurrencyAmount(text: string): number | null {
+    const matches = text.match(/(?:rp|idr)\s*[\d.,]+|[\d.,]+\s*(?:rp|idr)/gi);
     if (!matches || matches.length === 0) {
       return null;
     }
     const amounts = matches
-      .map(match => {
-        const cleaned = match
-          .replace(/rp|idr/gi, '')
-          .replace(/\s/g, '')
-          .replace(/\./g, '')
-          .replace(/,\d{1,2}$/, '');
-        const amount = Number(cleaned);
-        return Number.isFinite(amount) ? amount : 0;
-      })
+      .map(match => this.parseLocalizedAmount(match))
       .filter(amount => amount > 0)
       .sort((a, b) => b - a);
 
     return amounts[0] || null;
+  }
+
+  private static parseLocalizedAmount(value: string): number {
+    const numeric = value
+      .replace(/rp|idr/gi, '')
+      .replace(/\s/g, '')
+      .replace(/[^\d.,]/g, '');
+
+    if (!numeric) {
+      return 0;
+    }
+
+    const lastDot = numeric.lastIndexOf('.');
+    const lastComma = numeric.lastIndexOf(',');
+    let normalized = numeric;
+
+    if (lastDot >= 0 && lastComma >= 0) {
+      if (lastDot > lastComma) {
+        normalized = numeric.replace(/,/g, '');
+      } else {
+        normalized = numeric.replace(/\./g, '').replace(',', '.');
+      }
+    } else if (lastDot >= 0) {
+      const decimals = numeric.length - lastDot - 1;
+      normalized = decimals === 3 ? numeric.replace(/\./g, '') : numeric;
+    } else if (lastComma >= 0) {
+      const decimals = numeric.length - lastComma - 1;
+      normalized = decimals === 3 ? numeric.replace(/,/g, '') : numeric.replace(',', '.');
+    }
+
+    const amount = Number(normalized);
+    return Number.isFinite(amount) ? Math.floor(amount) : 0;
   }
 
   private static extractCounterparty(text: string): string | undefined {

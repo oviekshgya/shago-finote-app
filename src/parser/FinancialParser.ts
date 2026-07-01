@@ -7,7 +7,6 @@
 import uuid from 'react-native-uuid';
 import type {
   FinancialTransaction,
-  TransactionType,
   TransactionCategory,
   ParserRule,
 } from '../types/FinancialTransaction';
@@ -31,7 +30,7 @@ export const DEFAULT_PARSER_RULES: Record<string, ParserRule> = {
     bankName: 'BCA',
     packageName: 'com.bca.mobilebanking.android',
     titlePattern: /BCA|Transfer|Pembayaran/i,
-    textPattern: /Rp\.|IDR/i,
+    textPattern: /Rp\.?|IDR/i,
     amountPattern: /Rp\s*[\d.,]+|IDR\s*[\d.,]+/gi,
     typeExtractor: (notif) => {
       const text = `${notif.title || ''} ${notif.text || ''}`.toLowerCase();
@@ -58,7 +57,7 @@ export const DEFAULT_PARSER_RULES: Record<string, ParserRule> = {
     bankName: 'BRI',
     packageName: 'com.bri.brimobile',
     titlePattern: /BRI|Transaksi|Pembayaran/i,
-    textPattern: /Rp\.|IDR/i,
+    textPattern: /Rp\.?|IDR/i,
     amountPattern: /Rp\s*[\d.,]+|IDR\s*[\d.,]+/gi,
     typeExtractor: (notif) => {
       const text = `${notif.title || ''} ${notif.text || ''}`.toLowerCase();
@@ -80,7 +79,7 @@ export const DEFAULT_PARSER_RULES: Record<string, ParserRule> = {
     bankName: 'Mandiri',
     packageName: 'com.bankmandiri.apps',
     titlePattern: /Mandiri|Transaksi/i,
-    textPattern: /Rp\.|IDR/i,
+    textPattern: /Rp\.?|IDR/i,
     amountPattern: /Rp\s*[\d.,]+|IDR\s*[\d.,]+/gi,
     typeExtractor: (notif) => {
       const text = `${notif.title || ''} ${notif.text || ''}`.toLowerCase();
@@ -102,7 +101,7 @@ export const DEFAULT_PARSER_RULES: Record<string, ParserRule> = {
     bankName: 'DANA',
     packageName: 'com.dana.android',
     titlePattern: /DANA|Dompet/i,
-    textPattern: /Rp\.|IDR/i,
+    textPattern: /Rp\.?|IDR/i,
     amountPattern: /Rp\s*[\d.,]+|IDR\s*[\d.,]+/gi,
     typeExtractor: (notif) => {
       const text = `${notif.title || ''} ${notif.text || ''}`.toLowerCase();
@@ -129,7 +128,7 @@ export const DEFAULT_PARSER_RULES: Record<string, ParserRule> = {
     bankName: 'OVO',
     packageName: 'id.ovo.app',
     titlePattern: /OVO|Transaksi/i,
-    textPattern: /Rp\.|IDR/i,
+    textPattern: /Rp\.?|IDR/i,
     amountPattern: /Rp\s*[\d.,]+|IDR\s*[\d.,]+/gi,
     typeExtractor: (notif) => {
       const text = `${notif.title || ''} ${notif.text || ''}`.toLowerCase();
@@ -346,27 +345,45 @@ export class FinancialParser {
    * Parse string nominal ke number
    */
   private static parseAmount(amountStr: string): number | null {
-    // Remove currency symbols
-    let cleaned = amountStr.replace(/[Rp$₱]/g, '').trim();
+    const cleaned = amountStr
+      .replace(/rp|idr|php/gi, '')
+      .replace(/[₱$]/g, '')
+      .replace(/\s/g, '');
+    return this.parseLocalizedNumber(cleaned);
+  }
 
-    // Handle format 1.000.000 (dots as thousands separator)
-    if (cleaned.includes('.') && !cleaned.includes(',')) {
-      // Ambil bagian terakhir setelah dot terakhir
-      const parts = cleaned.split('.');
-      if (parts[parts.length - 1].length <= 2) {
-        // Format 1.000,00
-        cleaned = cleaned.replace(/\./g, '');
-      } else if (parts.length > 1 && parts[parts.length - 1].length === 3) {
-        // Format 1.000.000
-        cleaned = cleaned.replace(/\./g, '');
-      }
+  private static parseLocalizedNumber(value: string): number | null {
+    const numeric = value.replace(/[^\d.,]/g, '');
+    if (!numeric) {
+      return null;
     }
 
-    // Handle format dengan comma
-    cleaned = cleaned.replace(/,/g, '');
+    const lastDot = numeric.lastIndexOf('.');
+    const lastComma = numeric.lastIndexOf(',');
+    let normalized = numeric;
 
-    const amount = parseInt(cleaned, 10);
-    return isNaN(amount) ? null : amount;
+    if (lastDot >= 0 && lastComma >= 0) {
+      if (lastDot > lastComma) {
+        // US style: 10,000.00
+        normalized = numeric.replace(/,/g, '');
+      } else {
+        // Indonesian style: 10.000,00
+        normalized = numeric.replace(/\./g, '').replace(',', '.');
+      }
+    } else if (lastDot >= 0) {
+      const decimals = numeric.length - lastDot - 1;
+      normalized = decimals === 3
+        ? numeric.replace(/\./g, '')
+        : numeric;
+    } else if (lastComma >= 0) {
+      const decimals = numeric.length - lastComma - 1;
+      normalized = decimals === 3
+        ? numeric.replace(/,/g, '')
+        : numeric.replace(',', '.');
+    }
+
+    const amount = Number(normalized);
+    return Number.isFinite(amount) ? Math.floor(amount) : null;
   }
 
   /**
