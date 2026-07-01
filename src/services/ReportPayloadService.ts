@@ -1,8 +1,8 @@
 import {FinancialStorage} from '../storage/FinancialStorage';
 import type {
-  DueDate,
   FinancialSummary,
   FinancialTransaction,
+  SavingsGoal,
   TransactionCategory,
   TransactionType,
 } from '../types/FinancialTransaction';
@@ -145,7 +145,7 @@ export function buildReportPayloadFromTransactions({
       includeBillsOrGoals: false,
     },
     email: {
-      to: emailTo && emailTo.length > 0 ? emailTo : ['oviekshgy@gmail.com'],
+      to: emailTo ?? [],
       cc: [],
       bcc: [],
       subject: reportTitle,
@@ -172,7 +172,11 @@ export async function buildAiAnalysisPayload({
     summary.startDate,
     summary.endDate,
   );
-  const dueDates = await FinancialStorage.getAllDueDates();
+  const [goals, allSummary] = await Promise.all([
+    FinancialStorage.getAllGoals(),
+    FinancialStorage.calculateFinancialSummary('all'),
+  ]);
+  const savingBalance = Math.max(allSummary.netCashFlow, 0);
   const now = Date.now();
   const basePayload = buildReportPayloadFromSummaryAndTransactions({
     summary,
@@ -199,8 +203,8 @@ export async function buildAiAnalysisPayload({
     summary: basePayload.summary,
     transactions: basePayload.transactions,
     categorySummary: basePayload.categorySummary,
-    goals: dueDates.map(mapDueDateToGoal),
-    bills: dueDates.map(mapDueDateToBill),
+    goals: goals.filter(goal => !goal.isArchived).map(goal => mapSavingsGoalToAi(goal, savingBalance)),
+    bills: [],
     temperature: 0.2,
     options: {
       num_predict: 700,
@@ -341,21 +345,12 @@ function buildCategorySummary(transactions: FinancialTransaction[]): CategorySum
   return [...grouped.values()].sort((a, b) => b.amount - a.amount);
 }
 
-function mapDueDateToGoal(item: DueDate) {
+function mapSavingsGoalToAi(item: SavingsGoal, savingBalance: number) {
   return {
-    name: item.title,
-    targetAmount: item.amount,
-    currentAmount: item.isPaid ? item.amount : 0,
-    dueDate: item.dueDate,
-  };
-}
-
-function mapDueDateToBill(item: DueDate) {
-  return {
-    name: item.title,
-    amount: item.amount,
-    dueDate: item.dueDate,
-    status: item.isPaid ? 'paid' as const : 'pending' as const,
+    name: item.name,
+    targetAmount: item.targetAmount,
+    currentAmount: Math.min(savingBalance, item.targetAmount),
+    dueDate: item.targetDate,
   };
 }
 

@@ -32,7 +32,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const [listenerEnabled, setListenerEnabled] = useState(false);
   const [rawCount, setRawCount] = useState(0);
   const [transactionCount, setTransactionCount] = useState(0);
-  const [billCount, setBillCount] = useState(0);
+  const [goalCount, setGoalCount] = useState(0);
   const [installedApps, setInstalledApps] = useState<InstalledApp[]>([]);
   const [captureRules, setCaptureRules] = useState<CaptureRule[]>([]);
   const [captureFilter, setCaptureFilter] = useState<CaptureFilter>({captureAll: false, packages: []});
@@ -41,13 +41,14 @@ export default function SettingsScreen(): React.JSX.Element {
   const [incomeDraft, setIncomeDraft] = useState('');
   const [expenseDraft, setExpenseDraft] = useState('');
   const [addSourceVisible, setAddSourceVisible] = useState(false);
+  const [activeSourcesVisible, setActiveSourcesVisible] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [enabled, rawLogs, transactions, bills, appsJson, filterJson, rules] = await Promise.all([
+    const [enabled, rawLogs, transactions, goals, appsJson, filterJson, rules] = await Promise.all([
       NotificationModule.isListenerEnabled(),
       NotificationModule.getLogs(),
       FinancialStorage.getAllTransactions(),
-      FinancialStorage.getAllDueDates(),
+      FinancialStorage.getAllGoals(),
       NotificationModule.getInstalledApps(),
       NotificationModule.getCaptureFilter(),
       FinancialStorage.getCaptureRules(),
@@ -55,7 +56,7 @@ export default function SettingsScreen(): React.JSX.Element {
     setListenerEnabled(enabled);
     setRawCount(JSON.parse(rawLogs || '[]').length);
     setTransactionCount(transactions.length);
-    setBillCount(bills.length);
+    setGoalCount(goals.length);
     setInstalledApps(JSON.parse(appsJson || '[]'));
     const parsedFilter = JSON.parse(filterJson || '{"captureAll":false,"packages":[]}') as CaptureFilter;
     if (parsedFilter.captureAll) {
@@ -104,7 +105,7 @@ export default function SettingsScreen(): React.JSX.Element {
   };
 
   const clearAllLocalData = () => {
-    Alert.alert('Hapus semua data lokal?', 'Transaksi, tagihan, budget, dan cache parser akan dihapus.', [
+    Alert.alert('Hapus semua data lokal?', 'Transaksi, goals, budget, dan cache parser akan dihapus.', [
       {text: 'Batal', style: 'cancel'},
       {
         text: 'Hapus Semua',
@@ -251,19 +252,14 @@ export default function SettingsScreen(): React.JSX.Element {
             </Text>
           </Card>
 
-          {/* Enabled Rules */}
           {enabledRules.length > 0 && (
-            <View style={styles.enabledRulesSection}>
-              <Text style={styles.enabledRulesTitle}>App Aktif ({enabledRules.length})</Text>
-              {enabledRules.map(rule => (
-                <ActiveSourceRow
-                  key={rule.packageName}
-                  rule={rule}
-                  onSetup={() => openRuleModal(rule)}
-                  onDisable={() => disableApp(rule.packageName)}
-                />
-              ))}
-            </View>
+            <Pressable style={styles.activeSourcesCard} onPress={() => setActiveSourcesVisible(true)}>
+              <View style={styles.actionTextWrap}>
+                <Text style={styles.actionTitle}>App Aktif ({enabledRules.length})</Text>
+                <Text style={styles.actionSubtitle}>Tekan untuk melihat source notifikasi aktif</Text>
+              </View>
+              <Text style={styles.actionChevron}>›</Text>
+            </Pressable>
           )}
 
           <Pressable style={styles.primaryActionButton} onPress={() => setAddSourceVisible(true)}>
@@ -277,7 +273,7 @@ export default function SettingsScreen(): React.JSX.Element {
             <View style={styles.dataGrid}>
               <DataBox label="Raw notif" value={rawCount.toString()} />
               <DataBox label="Transaksi" value={transactionCount.toString()} />
-              <DataBox label="Tagihan" value={billCount.toString()} />
+              <DataBox label="Goals" value={goalCount.toString()} />
             </View>
           </Card>
           <ActionButton title="Hapus Raw Notification" subtitle="Membersihkan log mentah listener" danger onPress={clearRawLogs} />
@@ -336,6 +332,43 @@ export default function SettingsScreen(): React.JSX.Element {
                 <Text style={styles.modalSaveText}>Simpan</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={activeSourcesVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setActiveSourcesVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheetTall}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>App Aktif</Text>
+                <Text style={styles.modalSubtitle}>Daftar source notifikasi yang sedang dipantau</Text>
+              </View>
+              <Pressable style={styles.modalCloseButton} onPress={() => setActiveSourcesVisible(false)}>
+                <Text style={styles.modalCloseText}>x</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalList}>
+              {enabledRules.map(rule => (
+                <ActiveSourceRow
+                  key={rule.packageName}
+                  rule={rule}
+                  onSetup={() => {
+                    setActiveSourcesVisible(false);
+                    openRuleModal(rule);
+                  }}
+                  onDisable={async () => {
+                    await disableApp(rule.packageName);
+                    setActiveSourcesVisible(false);
+                  }}
+                />
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -559,16 +592,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  enabledRulesSection: {
+  activeSourcesCard: {
     marginTop: 10,
     marginBottom: 10,
-  },
-  enabledRulesTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.muted,
-    marginBottom: 8,
-    textTransform: 'uppercase',
+    minHeight: 58,
+    paddingHorizontal: 14,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   searchSection: {
     marginTop: 12,

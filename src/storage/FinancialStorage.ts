@@ -11,6 +11,7 @@ import type {
   BudgetLimit,
   NotificationRawLog,
   FinancialSummary,
+  SavingsGoal,
   TransactionCategory,
 } from '../types/FinancialTransaction';
 import type {CaptureRule} from '../types/CaptureRule';
@@ -21,6 +22,7 @@ import type {CaptureRule} from '../types/CaptureRule';
 const STORAGE_KEYS = {
   TRANSACTIONS: 'finote:transactions',
   DUE_DATES: 'finote:due_dates',
+  GOALS: 'finote:goals',
   BUDGETS: 'finote:budgets',
   RAW_NOTIFICATIONS: 'finote:raw_notifications',
   PARSER_CACHE: 'finote:parser_cache',
@@ -153,6 +155,48 @@ export class FinancialStorage {
     const dueDates = await this.getAllDueDates();
     const filtered = dueDates.filter(d => d.id !== id);
     await AsyncStorage.setItem(STORAGE_KEYS.DUE_DATES, JSON.stringify(filtered));
+  }
+
+  /**
+   * SAVINGS GOALS MANAGEMENT
+   */
+
+  static async addGoal(goal: SavingsGoal): Promise<void> {
+    const goals = await this.getAllGoals();
+    goals.push(goal);
+    await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
+  }
+
+  static async getAllGoals(): Promise<SavingsGoal[]> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.GOALS);
+    return data ? JSON.parse(data) : [];
+  }
+
+  static async getGoalById(id: string): Promise<SavingsGoal | null> {
+    const goals = await this.getAllGoals();
+    return goals.find(goal => goal.id === id) || null;
+  }
+
+  static async updateGoal(id: string, updates: Partial<SavingsGoal>): Promise<void> {
+    const goals = await this.getAllGoals();
+    const index = goals.findIndex(goal => goal.id === id);
+    if (index === -1) {
+      throw new Error(`Goal ${id} not found`);
+    }
+    goals[index] = {
+      ...goals[index],
+      ...updates,
+      updatedAt: Date.now(),
+    };
+    await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
+  }
+
+  static async deleteGoal(id: string): Promise<void> {
+    const goals = await this.getAllGoals();
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.GOALS,
+      JSON.stringify(goals.filter(goal => goal.id !== id)),
+    );
   }
 
   /**
@@ -417,9 +461,10 @@ export class FinancialStorage {
    */
 
   static async exportAllData(): Promise<string> {
-    const [transactions, dueDates, budgets, config, syncMeta] = await Promise.all([
+    const [transactions, dueDates, goals, budgets, config, syncMeta] = await Promise.all([
       this.getAllTransactions(),
       this.getAllDueDates(),
+      this.getAllGoals(),
       this.getAllBudgets(),
       this.getAppConfig(),
       this.getSyncMetadata(),
@@ -430,6 +475,7 @@ export class FinancialStorage {
       exportedAt: new Date().toISOString(),
       transactions,
       dueDates,
+      goals,
       budgets,
       config,
       syncMeta,
@@ -445,6 +491,7 @@ export class FinancialStorage {
 
       await AsyncStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(data.transactions || []));
       await AsyncStorage.setItem(STORAGE_KEYS.DUE_DATES, JSON.stringify(data.dueDates || []));
+      await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(data.goals || []));
       await AsyncStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(data.budgets || []));
       await AsyncStorage.setItem(STORAGE_KEYS.APP_CONFIG, JSON.stringify(data.config || {}));
       await AsyncStorage.setItem(STORAGE_KEYS.SYNC_METADATA, JSON.stringify(data.syncMeta || {}));
@@ -461,6 +508,7 @@ export class FinancialStorage {
     await Promise.all([
       AsyncStorage.removeItem(STORAGE_KEYS.TRANSACTIONS),
       AsyncStorage.removeItem(STORAGE_KEYS.DUE_DATES),
+      AsyncStorage.removeItem(STORAGE_KEYS.GOALS),
       AsyncStorage.removeItem(STORAGE_KEYS.BUDGETS),
       AsyncStorage.removeItem(STORAGE_KEYS.RAW_NOTIFICATIONS),
       AsyncStorage.removeItem(STORAGE_KEYS.PARSER_CACHE),

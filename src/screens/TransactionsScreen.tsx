@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTransactions} from '../hooks/useTransactions';
-import type {FinancialTransaction} from '../types/FinancialTransaction';
+import type {FinancialTransaction, TransactionCategory, TransactionType} from '../types/FinancialTransaction';
 import {
   formatCurrency,
   formatTransactionDate,
@@ -22,16 +22,25 @@ import {
 } from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
 import {exportTransactions} from '../services/BackendApi';
-import {buildReportPayloadFromTransactions} from '../services/ReportPayloadService';
+import {buildReportPayloadFromTransactions, type ExportFormat} from '../services/ReportPayloadService';
 
 export default function TransactionsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const {transactions, loading, deleteTransaction} = useTransactions();
+  const {transactions, loading, deleteTransaction, updateTransaction} = useTransactions();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState('Menyiapkan payload report...');
+  const [exportEmail, setExportEmail] = useState('');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('excel');
+  const [exportFormVisible, setExportFormVisible] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null);
+  const [editType, setEditType] = useState<TransactionType>('expense');
+  const [editCategory, setEditCategory] = useState<TransactionCategory>('other');
+  const [editAmount, setEditAmount] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editMerchant, setEditMerchant] = useState('');
 
   const filtered = transactions
     .filter(t => {
@@ -93,9 +102,57 @@ export default function TransactionsScreen(): React.JSX.Element {
     );
   };
 
-  const handleExport = async () => {
+  const openExportForm = () => {
     if (filtered.length === 0) {
       Alert.alert('Tidak ada data', 'Belum ada transaksi yang bisa diexport.');
+      return;
+    }
+    setExportFormVisible(true);
+  };
+
+  const openEditTransaction = (transaction: FinancialTransaction) => {
+    setEditingTransaction(transaction);
+    setEditType(transaction.type);
+    setEditCategory(transaction.category);
+    setEditAmount(formatRupiahInput(String(transaction.amount)));
+    setEditDescription(transaction.description);
+    setEditMerchant(transaction.merchant ?? '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTransaction) {
+      return;
+    }
+    const numericAmount = Number(editAmount.replace(/[^\d]/g, ''));
+    if (!numericAmount || numericAmount <= 0) {
+      Alert.alert('Nominal belum valid');
+      return;
+    }
+    if (!editDescription.trim()) {
+      Alert.alert('Deskripsi wajib diisi');
+      return;
+    }
+
+    try {
+      await updateTransaction(editingTransaction.id, {
+        type: editType,
+        category: editCategory,
+        amount: numericAmount,
+        description: editDescription.trim(),
+        merchant: editMerchant.trim() || undefined,
+        isVerified: true,
+      });
+      setSelectedTransaction(null);
+      setEditingTransaction(null);
+    } catch (error) {
+      Alert.alert('Gagal edit transaksi', String(error));
+    }
+  };
+
+  const handleExport = async () => {
+    const emailTo = parseEmailList(exportEmail);
+    if (emailTo.length === 0) {
+      Alert.alert('Email wajib diisi', 'Isi minimal satu email tujuan export.');
       return;
     }
 
@@ -105,11 +162,12 @@ export default function TransactionsScreen(): React.JSX.Element {
       const payload = buildReportPayloadFromTransactions({
         transactions: filtered,
         periodType: 'all',
-        format: 'excel',
-        emailTo: ['oviekshgy@gmail.com'],
+        format: exportFormat,
+        emailTo,
       });
       setExportProgress('Mengirim report ke backend...');
       const result = await exportTransactions(payload);
+      setExportFormVisible(false);
       setExportProgress('Report berhasil dikirim ke email.');
       Alert.alert(
         'Export berhasil',
@@ -132,7 +190,7 @@ export default function TransactionsScreen(): React.JSX.Element {
           <Text style={styles.title}>Spending details</Text>
           <Text style={styles.subtitle}>{filtered.length} transaksi ditemukan</Text>
         </View>
-        <Pressable style={styles.exportButton} onPress={handleExport} disabled={exporting}>
+        <Pressable style={styles.exportButton} onPress={openExportForm} disabled={exporting}>
           <Text style={styles.exportButtonText}>{exporting ? 'Exporting' : 'Export'}</Text>
         </Pressable>
       </View>
@@ -191,6 +249,7 @@ export default function TransactionsScreen(): React.JSX.Element {
                     key={transaction.id}
                     transaction={transaction}
                     onPress={() => setSelectedTransaction(transaction)}
+                    onEdit={() => openEditTransaction(transaction)}
                     onDelete={() => confirmDelete(transaction)}
                   />
                 ))}
@@ -206,8 +265,118 @@ export default function TransactionsScreen(): React.JSX.Element {
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
       />
+      <TransactionEditModal
+        transaction={editingTransaction}
+        type={editType}
+        category={editCategory}
+        amount={editAmount}
+        description={editDescription}
+        merchant={editMerchant}
+        onChangeType={setEditType}
+        onChangeCategory={setEditCategory}
+        onChangeAmount={value => setEditAmount(formatRupiahInput(value))}
+        onChangeDescription={setEditDescription}
+        onChangeMerchant={setEditMerchant}
+        onClose={() => setEditingTransaction(null)}
+        onSubmit={handleSaveEdit}
+      />
+      <ExportFormModal
+        visible={exportFormVisible}
+        email={exportEmail}
+        format={exportFormat}
+        onChangeEmail={setExportEmail}
+        onChangeFormat={setExportFormat}
+        onClose={() => setExportFormVisible(false)}
+        onSubmit={handleExport}
+      />
       <ExportLoadingModal visible={exporting} progressText={exportProgress} />
     </View>
+  );
+}
+
+function parseEmailList(value: string): string[] {
+  return value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function formatRupiahInput(value: string): string {
+  const digits = value.replace(/[^\d]/g, '');
+  if (!digits) {
+    return '';
+  }
+  return `Rp ${Number(digits).toLocaleString('id-ID')}`;
+}
+
+function ExportFormModal({
+  visible,
+  email,
+  format,
+  onChangeEmail,
+  onChangeFormat,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean;
+  email: string;
+  format: ExportFormat;
+  onChangeEmail(value: string): void;
+  onChangeFormat(value: ExportFormat): void;
+  onClose(): void;
+  onSubmit(): void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalEyebrow}>Export report</Text>
+          <Text style={styles.modalTitle}>Kirim laporan ke email</Text>
+          <Text style={styles.exportFormHint}>
+            File laporan akan dibuat oleh backend dan dikirim ke alamat email tujuan.
+          </Text>
+
+          <Text style={styles.exportFormLabel}>Format file</Text>
+          <View style={styles.exportFormatRow}>
+            {(['excel', 'pdf'] as const).map(item => (
+              <Pressable
+                key={item}
+                style={[styles.exportFormatButton, format === item && styles.exportFormatButtonActive]}
+                onPress={() => onChangeFormat(item)}>
+                <Text
+                  style={[
+                    styles.exportFormatText,
+                    format === item && styles.exportFormatTextActive,
+                  ]}>
+                  {item === 'excel' ? 'Excel' : 'PDF'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.exportFormLabel}>Email tujuan</Text>
+          <TextInput
+            style={styles.emailInput}
+            placeholder="nama@email.com, finance@email.com"
+            placeholderTextColor={colors.faint}
+            value={email}
+            onChangeText={onChangeEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <View style={styles.exportFormActions}>
+            <Pressable style={styles.exportCancelButton} onPress={onClose}>
+              <Text style={styles.exportCancelText}>Batal</Text>
+            </Pressable>
+            <Pressable style={styles.exportSubmitButton} onPress={onSubmit}>
+              <Text style={styles.exportSubmitText}>Kirim</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -261,10 +430,12 @@ function SummaryPill({
 function TransactionItem({
   transaction,
   onPress,
+  onEdit,
   onDelete,
 }: {
   transaction: FinancialTransaction;
   onPress(): void;
+  onEdit(): void;
   onDelete(): void;
 }) {
   const isIncome = transaction.type === 'income';
@@ -286,6 +457,14 @@ function TransactionItem({
         {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
       </Text>
       <Pressable
+        style={styles.editButton}
+        onPress={event => {
+          event.stopPropagation();
+          onEdit();
+        }}>
+        <Text style={styles.editButtonText}>Edit</Text>
+      </Pressable>
+      <Pressable
         style={styles.deleteButton}
         onPress={event => {
           event.stopPropagation();
@@ -294,6 +473,139 @@ function TransactionItem({
         <Text style={styles.deleteButtonText}>Hapus</Text>
       </Pressable>
     </Pressable>
+  );
+}
+
+const editableCategories: TransactionCategory[] = [
+  'salary',
+  'bonus',
+  'freelance',
+  'investment',
+  'food',
+  'transport',
+  'shopping',
+  'utilities',
+  'entertainment',
+  'healthcare',
+  'education',
+  'subscription',
+  'other',
+];
+
+function TransactionEditModal({
+  transaction,
+  type,
+  category,
+  amount,
+  description,
+  merchant,
+  onChangeType,
+  onChangeCategory,
+  onChangeAmount,
+  onChangeDescription,
+  onChangeMerchant,
+  onClose,
+  onSubmit,
+}: {
+  transaction: FinancialTransaction | null;
+  type: TransactionType;
+  category: TransactionCategory;
+  amount: string;
+  description: string;
+  merchant: string;
+  onChangeType(value: TransactionType): void;
+  onChangeCategory(value: TransactionCategory): void;
+  onChangeAmount(value: string): void;
+  onChangeDescription(value: string): void;
+  onChangeMerchant(value: string): void;
+  onClose(): void;
+  onSubmit(): void;
+}) {
+  return (
+    <Modal visible={Boolean(transaction)} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={styles.modalEyebrow}>Edit transaction</Text>
+            <Text style={styles.modalTitle}>Ubah detail transaksi</Text>
+
+            <Text style={styles.editLabel}>Tipe</Text>
+            <View style={styles.editSegment}>
+              {(['income', 'expense'] as const).map(item => (
+                <Pressable
+                  key={item}
+                  style={[styles.editSegmentButton, type === item && styles.editSegmentButtonActive]}
+                  onPress={() => onChangeType(item)}>
+                  <Text
+                    style={[
+                      styles.editSegmentText,
+                      type === item && styles.editSegmentTextActive,
+                    ]}>
+                    {item === 'income' ? 'Masuk' : 'Keluar'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.editLabel}>Nominal</Text>
+            <TextInput
+              style={styles.editInput}
+              value={amount}
+              onChangeText={onChangeAmount}
+              keyboardType="numeric"
+              placeholder="Rp 10.000"
+              placeholderTextColor={colors.faint}
+            />
+
+            <Text style={styles.editLabel}>Deskripsi</Text>
+            <TextInput
+              style={styles.editInput}
+              value={description}
+              onChangeText={onChangeDescription}
+              placeholder="Deskripsi transaksi"
+              placeholderTextColor={colors.faint}
+            />
+
+            <Text style={styles.editLabel}>Merchant</Text>
+            <TextInput
+              style={styles.editInput}
+              value={merchant}
+              onChangeText={onChangeMerchant}
+              placeholder="Nama merchant atau sumber"
+              placeholderTextColor={colors.faint}
+            />
+
+            <Text style={styles.editLabel}>Kategori</Text>
+            <View style={styles.categoryWrap}>
+              {editableCategories.map(item => (
+                <Pressable
+                  key={item}
+                  style={[styles.categoryChip, category === item && styles.categoryChipActive]}
+                  onPress={() => onChangeCategory(item)}>
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      category === item && styles.categoryChipTextActive,
+                    ]}>
+                    {item}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+
+          <View style={styles.editActions}>
+            <Pressable style={styles.editCancelButton} onPress={onClose}>
+              <Text style={styles.editCancelText}>Batal</Text>
+            </Pressable>
+            <Pressable style={styles.editSaveButton} onPress={onSubmit}>
+              <Text style={styles.editSaveText}>Simpan</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -488,6 +800,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  emailInput: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    color: colors.ink,
+    marginBottom: 10,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   filterButtons: {
     flexDirection: 'row',
     gap: 8,
@@ -590,14 +913,27 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   transactionAmount: {
-    maxWidth: 104,
+    maxWidth: 92,
     fontSize: 12,
     fontWeight: '900',
     textAlign: 'right',
   },
+  editButton: {
+    minHeight: 30,
+    paddingHorizontal: 9,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButtonText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '900',
+  },
   deleteButton: {
     minHeight: 30,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     borderRadius: radii.md,
     backgroundColor: colors.redSoft,
     alignItems: 'center',
@@ -645,6 +981,77 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
   },
+  exportFormHint: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  exportFormLabel: {
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  exportFormatRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  exportFormatButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportFormatButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  exportFormatText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  exportFormatTextActive: {
+    color: colors.surface,
+  },
+  exportFormActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  exportCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: radii.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportCancelText: {
+    color: colors.ink,
+    fontWeight: '900',
+  },
+  exportSubmitButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportSubmitText: {
+    color: colors.surface,
+    fontWeight: '900',
+  },
   detailCard: {
     marginTop: 16,
     borderRadius: radii.xl,
@@ -652,6 +1059,106 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 14,
+  },
+  editLabel: {
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: '900',
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  editInput: {
+    minHeight: 46,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    color: colors.ink,
+    fontSize: 14,
+  },
+  editSegment: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editSegmentButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editSegmentButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  editSegmentText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  editSegmentTextActive: {
+    color: colors.surface,
+  },
+  categoryWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  categoryChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  categoryChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryChipText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  categoryChipTextActive: {
+    color: colors.surface,
+  },
+  editActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  editCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: radii.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editCancelText: {
+    color: colors.ink,
+    fontWeight: '900',
+  },
+  editSaveButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editSaveText: {
+    color: colors.surface,
+    fontWeight: '900',
   },
   detailRow: {
     minHeight: 48,

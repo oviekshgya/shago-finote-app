@@ -213,7 +213,8 @@ export class TransactionCaptureService {
       const notifications = JSON.parse(rawLogs || '[]') as NotificationLog[];
 
       if (notifications.length === 0) {
-        return { captured: 0, failed: 0, duplicates: 0 };
+        const reparseStats = await this.reparseFailedNotifications();
+        return { captured: reparseStats.reParsed, failed: reparseStats.stillFailed, duplicates: 0 };
       }
 
       const transactions = await FinancialStorage.getAllTransactions();
@@ -225,13 +226,15 @@ export class TransactionCaptureService {
       );
 
       if (pendingNotifications.length === 0) {
-        return { captured: 0, failed: 0, duplicates: 0 };
+        const reparseStats = await this.reparseFailedNotifications();
+        return { captured: reparseStats.reParsed, failed: reparseStats.stillFailed, duplicates: 0 };
       }
 
       const { stats } = await this.captureNotifications(pendingNotifications);
+      const reparseStats = await this.reparseFailedNotifications();
 
       return {
-        captured: stats.successfulParse,
+        captured: stats.successfulParse + reparseStats.reParsed,
         failed: stats.errors + stats.excluded,
         duplicates: stats.duplicates,
       };
@@ -481,11 +484,8 @@ export class TransactionCaptureService {
         receivedAt: log.receivedAt,
       };
 
-      const parseResult = FinancialParser.parse(notification);
-
-      if (parseResult.success && parseResult.transaction) {
-        // Save newly parsed transaction
-        await FinancialStorage.addTransaction(parseResult.transaction);
+      const result = await this.captureNotification(notification);
+      if (result.success && result.transaction) {
         reParsed++;
       } else {
         stillFailed++;

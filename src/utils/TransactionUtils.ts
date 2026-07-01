@@ -13,7 +13,6 @@ export function detectDuplicate(
   toleranceMinutes: number = 5,
 ): boolean {
   const toleranceMs = toleranceMinutes * 60 * 1000;
-  const timeDiff = Math.abs(transaction.date - new Date().getTime());
 
   return existingTransactions.some(existing => {
     // Check if amounts match
@@ -158,7 +157,7 @@ export function groupTransactionsByDate(
  */
 export function calculateDailyBalance(
   transactions: FinancialTransaction[],
-  startDate?: number,
+  _startDate?: number,
 ): Record<string, number> {
   const dailyBalance: Record<string, number> = {};
 

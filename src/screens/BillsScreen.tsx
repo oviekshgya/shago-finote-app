@@ -1,6 +1,6 @@
 /**
- * Bills Screen
- * Manajemen tagihan dan pembayaran jatuh tempo.
+ * Goals Screen
+ * Setup target tabungan tanpa memotong saldo atau membuat tagihan.
  */
 
 import React, {useCallback, useEffect, useState} from 'react';
@@ -17,92 +17,84 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {FinancialStorage} from '../storage/FinancialStorage';
-import type {DueDate} from '../types/FinancialTransaction';
+import type {SavingsGoal} from '../types/FinancialTransaction';
 import {formatCurrency, formatTransactionDate} from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
 
 export default function BillsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const [items, setItems] = useState<DueDate[]>([]);
-  const [title, setTitle] = useState('');
+  const [goals, setGoals] = useState<SavingsGoal[]>([]);
+  const [savingBalance, setSavingBalance] = useState(0);
+  const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState(startOfTodayAtNine());
+  const [targetDate, setTargetDate] = useState(startOfTodayAtNine());
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerMonth, setPickerMonth] = useState(startOfMonth(startOfTodayAtNine()));
-  const [installmentCount, setInstallmentCount] = useState('1');
-  const [isRecurring, setIsRecurring] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const loadItems = useCallback(async () => {
-    const data = await FinancialStorage.getAllDueDates();
-    setItems(data.sort((a, b) => a.dueDate - b.dueDate));
+  const loadGoals = useCallback(async () => {
+    const [data, summary] = await Promise.all([
+      FinancialStorage.getAllGoals(),
+      FinancialStorage.calculateFinancialSummary('all'),
+    ]);
+    setGoals(data.filter(goal => !goal.isArchived).sort((a, b) => a.targetDate - b.targetDate));
+    setSavingBalance(Math.max(summary.netCashFlow, 0));
   }, []);
 
   useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+    loadGoals().catch(error => Alert.alert('Gagal memuat goals', String(error)));
+  }, [loadGoals]);
 
-  const saveBill = async () => {
+  const saveGoal = async () => {
     const numericAmount = Number(amount.replace(/[^\d]/g, ''));
-    const totalInstallments = clampNumber(Number(installmentCount.replace(/[^\d]/g, '')), 1, 60);
-    if (!title.trim()) {
-      Alert.alert('Nama tagihan wajib diisi');
+    if (!name.trim()) {
+      Alert.alert('Nama goal wajib diisi');
       return;
     }
     if (!numericAmount || numericAmount <= 0) {
-      Alert.alert('Nominal belum valid');
+      Alert.alert('Nominal target belum valid');
       return;
     }
 
     const now = Date.now();
-    const parentId = `bill-${now}`;
-    const bills = Array.from({length: totalInstallments}, (_, index): DueDate => {
-      const noteDueDate = buildDueDate(dueDate, index);
-      return {
-        id: totalInstallments === 1 ? parentId : `${parentId}-${index + 1}`,
-        title: totalInstallments === 1 ? title.trim() : `${title.trim()} (${index + 1}/${totalInstallments})`,
-        amount: numericAmount,
-        currency: 'IDR',
-        dueDate: noteDueDate,
-        category: 'utilities',
-        isRecurring,
-        recurringInterval: isRecurring || totalInstallments > 1 ? 'monthly' : undefined,
-        createdAt: now,
-        updatedAt: now,
-        isPaid: false,
-        reminderDaysBefore: 1,
-        installmentIndex: index + 1,
-        installmentTotal: totalInstallments,
-        parentInstallmentId: parentId,
-      };
-    });
+    const goal: SavingsGoal = {
+      id: `goal-${now}`,
+      name: name.trim(),
+      targetAmount: numericAmount,
+      currency: 'IDR',
+      targetDate,
+      createdAt: now,
+      updatedAt: now,
+    };
 
     setSaving(true);
     try {
-      for (const bill of bills) {
-        await FinancialStorage.addDueDate(bill);
-      }
-      setTitle('');
+      await FinancialStorage.addGoal(goal);
+      setName('');
       setAmount('');
-      setDueDate(startOfTodayAtNine());
+      setTargetDate(startOfTodayAtNine());
       setPickerMonth(startOfMonth(startOfTodayAtNine()));
-      setInstallmentCount('1');
-      setIsRecurring(false);
-      await loadItems();
-      Alert.alert('Tagihan tersimpan', `${bills.length} tagihan jatuh tempo berhasil ditambahkan.`);
+      await loadGoals();
+      Alert.alert('Goal tersimpan', 'Target tabungan berhasil ditambahkan.');
     } catch (error) {
-      Alert.alert('Gagal menyimpan', String(error));
+      Alert.alert('Gagal menyimpan goal', String(error));
     } finally {
       setSaving(false);
     }
   };
 
-  const markPaid = async (item: DueDate) => {
-    await FinancialStorage.updateDueDate(item.id, {
-      isPaid: true,
-      paidDate: Date.now(),
-    });
-    await loadItems();
+  const deleteGoal = (goal: SavingsGoal) => {
+    Alert.alert('Hapus goal?', goal.name, [
+      {text: 'Batal', style: 'cancel'},
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: async () => {
+          await FinancialStorage.deleteGoal(goal.id);
+          await loadGoals();
+        },
+      },
+    ]);
   };
 
   return (
@@ -111,17 +103,23 @@ export default function BillsScreen(): React.JSX.Element {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Goals</Text>
-          <Text style={styles.title}>Bills & targets</Text>
-          <Text style={styles.subtitle}>Catat pembayaran keluar dan tanggal jatuh tempo.</Text>
+          <Text style={styles.title}>Savings target</Text>
+          <Text style={styles.subtitle}>Atur target tabungan. Goals tidak mengurangi saldo.</Text>
+        </View>
+
+        <View style={styles.savingCard}>
+          <Text style={styles.savingLabel}>Available saving</Text>
+          <Text style={styles.savingAmount}>{formatCurrency(savingBalance)}</Text>
+          <Text style={styles.savingHint}>Dihitung dari total uang masuk dikurangi uang keluar.</Text>
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>New payment goal</Text>
+          <Text style={styles.sectionTitle}>Setup goal</Text>
           <TextInput
             style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Nama tagihan, misal Internet Rumah"
+            value={name}
+            onChangeText={setName}
+            placeholder="Nama goal, misal Dana Darurat"
             placeholderTextColor={colors.faint}
           />
           <TextInput
@@ -129,51 +127,44 @@ export default function BillsScreen(): React.JSX.Element {
             value={amount}
             onChangeText={value => setAmount(formatRupiahInput(value))}
             keyboardType="numeric"
-            placeholder="Rp 250.000"
+            placeholder="Target nominal, misal Rp 1.000.000"
             placeholderTextColor={colors.faint}
           />
-          <Text style={styles.inputLabel}>Tanggal jatuh tempo</Text>
+          <Text style={styles.inputLabel}>Target tanggal</Text>
           <Pressable style={styles.datePickerButton} onPress={() => setPickerVisible(true)}>
-            <Text style={styles.datePickerText}>{formatReadableDate(dueDate)}</Text>
+            <Text style={styles.datePickerText}>{formatReadableDate(targetDate)}</Text>
             <Text style={styles.datePickerAction}>Pilih</Text>
           </Pressable>
-          <TextInput
-            style={styles.input}
-            value={installmentCount}
-            onChangeText={setInstallmentCount}
-            keyboardType="numeric"
-            placeholder="Jumlah cicilan/tagihan, contoh 12"
-            placeholderTextColor={colors.faint}
-          />
-          <Pressable
-            style={[styles.toggleRow, isRecurring && styles.toggleRowActive]}
-            onPress={() => setIsRecurring(value => !value)}>
-            <Text style={styles.toggleText}>Tagihan berulang bulanan</Text>
-            <Text style={styles.toggleValue}>{isRecurring ? 'Aktif' : 'Off'}</Text>
-          </Pressable>
-          <Pressable style={styles.saveButton} onPress={saveBill} disabled={saving}>
-            <Text style={styles.saveButtonText}>{saving ? 'Menyimpan...' : 'Simpan Tagihan'}</Text>
+          <Pressable style={styles.saveButton} onPress={saveGoal} disabled={saving}>
+            <Text style={styles.saveButtonText}>{saving ? 'Menyimpan...' : 'Simpan Goal'}</Text>
           </Pressable>
         </View>
 
-        <Text style={styles.sectionTitle}>Upcoming</Text>
-        {items.length === 0 ? (
+        <Text style={styles.sectionTitle}>Goals aktif</Text>
+        {goals.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Belum ada tagihan</Text>
-            <Text style={styles.emptyText}>Tambahkan pembayaran keluar agar jatuh tempo terlihat di sini.</Text>
+            <Text style={styles.emptyTitle}>Belum ada goals</Text>
+            <Text style={styles.emptyText}>Tambahkan target tabungan agar progress tampil di Home.</Text>
           </View>
         ) : (
-          items.map(item => <BillItem key={item.id} item={item} onPaid={() => markPaid(item)} />)
+          goals.map(goal => (
+            <GoalItem
+              key={goal.id}
+              goal={goal}
+              savingBalance={savingBalance}
+              onDelete={() => deleteGoal(goal)}
+            />
+          ))
         )}
       </ScrollView>
 
       <DatePickerModal
         visible={pickerVisible}
         month={pickerMonth}
-        selectedDate={dueDate}
+        selectedDate={targetDate}
         onChangeMonth={setPickerMonth}
         onSelect={value => {
-          setDueDate(value);
+          setTargetDate(value);
           setPickerVisible(false);
         }}
         onClose={() => setPickerVisible(false)}
@@ -182,57 +173,43 @@ export default function BillsScreen(): React.JSX.Element {
   );
 }
 
-function BillItem({item, onPaid}: {item: DueDate; onPaid(): void}) {
-  const now = Date.now();
-  const isOverdue = item.dueDate < now && !item.isPaid;
-  const statusText = item.isPaid ? 'Lunas' : isOverdue ? 'Terlambat' : 'Upcoming';
+function GoalItem({
+  goal,
+  savingBalance,
+  onDelete,
+}: {
+  goal: SavingsGoal;
+  savingBalance: number;
+  onDelete(): void;
+}) {
+  const current = Math.min(savingBalance, goal.targetAmount);
+  const progress = goal.targetAmount > 0 ? Math.min(current / goal.targetAmount, 1) : 0;
+  const achieved = savingBalance >= goal.targetAmount;
+  const remaining = Math.max(goal.targetAmount - savingBalance, 0);
 
   return (
-    <View style={styles.billItem}>
-      <View style={styles.billInfo}>
-        <Text style={styles.billTitle}>{item.title}</Text>
-        <Text style={styles.billMeta}>{formatTransactionDate(item.dueDate)}</Text>
-        {item.installmentTotal && item.installmentTotal > 1 && (
-          <Text style={styles.billRepeat}>Cicilan {item.installmentIndex}/{item.installmentTotal}</Text>
-        )}
-        {item.isRecurring && <Text style={styles.billRepeat}>Berulang bulanan</Text>}
-      </View>
-      <View style={styles.billRight}>
-        <Text style={styles.billAmount}>{formatCurrency(item.amount)}</Text>
-        <Text style={[styles.billStatus, isOverdue && styles.billStatusOverdue]}>
-          {statusText}
+    <View style={styles.goalItem}>
+      <View style={styles.goalTop}>
+        <View style={styles.goalCopy}>
+          <Text style={styles.goalTitle}>{goal.name}</Text>
+          <Text style={styles.goalMeta}>Target {formatTransactionDate(goal.targetDate)}</Text>
+        </View>
+        <Text style={[styles.goalStatus, achieved ? styles.goalStatusDone : styles.goalStatusOpen]}>
+          {achieved ? 'Berhasil' : 'On progress'}
         </Text>
-        {!item.isPaid && (
-          <Pressable style={styles.paidButton} onPress={onPaid}>
-            <Text style={styles.paidButtonText}>Lunas</Text>
-          </Pressable>
-        )}
       </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, {width: `${Math.max(4, Math.round(progress * 100))}%`}]} />
+      </View>
+      <View style={styles.goalFooter}>
+        <Text style={styles.goalAmount}>{formatCurrency(current)} / {formatCurrency(goal.targetAmount)}</Text>
+        <Text style={styles.goalRemaining}>{remaining > 0 ? `Kurang ${formatCurrency(remaining)}` : 'Target tercapai'}</Text>
+      </View>
+      <Pressable style={styles.deleteButton} onPress={onDelete}>
+        <Text style={styles.deleteButtonText}>Hapus Goal</Text>
+      </Pressable>
     </View>
   );
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) {
-    return min;
-  }
-  return Math.min(Math.max(value, min), max);
-}
-
-function buildDueDate(baseDate: number, monthOffset: number): number {
-  const source = new Date(baseDate);
-  const date = new Date(
-    source.getFullYear(),
-    source.getMonth() + monthOffset,
-    1,
-    9,
-    0,
-    0,
-    0,
-  );
-  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  date.setDate(Math.min(source.getDate(), lastDay));
-  return date.getTime();
 }
 
 function startOfTodayAtNine(): number {
@@ -376,6 +353,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
   },
+  savingCard: {
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: radii.xl,
+    backgroundColor: colors.primary,
+    ...shadow,
+  },
+  savingLabel: {
+    color: '#ddd5ff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  savingAmount: {
+    marginTop: 6,
+    color: colors.surface,
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  savingHint: {
+    marginTop: 6,
+    color: '#eee9ff',
+    fontSize: 12,
+  },
   formCard: {
     padding: 16,
     marginBottom: 20,
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   },
   datePickerButton: {
     minHeight: 48,
-    marginBottom: 10,
+    marginBottom: 14,
     borderRadius: radii.md,
     backgroundColor: colors.background,
     borderWidth: 1,
@@ -431,32 +431,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 12,
     fontWeight: '900',
-  },
-  toggleRow: {
-    minHeight: 46,
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  toggleRowActive: {
-    borderColor: colors.teal,
-    backgroundColor: colors.tealSoft,
-  },
-  toggleText: {
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  toggleValue: {
-    color: colors.teal,
-    fontSize: 12,
-    fontWeight: '800',
   },
   saveButton: {
     minHeight: 46,
@@ -485,10 +459,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
   },
-  billItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+  goalItem: {
     padding: 14,
     marginBottom: 10,
     borderRadius: radii.xl,
@@ -496,52 +467,81 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  billInfo: {
+  goalTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  goalCopy: {
     flex: 1,
   },
-  billTitle: {
+  goalTitle: {
     color: colors.ink,
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
     marginBottom: 4,
   },
-  billMeta: {
+  goalMeta: {
     color: colors.muted,
     fontSize: 12,
   },
-  billRepeat: {
-    color: colors.teal,
-    fontSize: 11,
-    marginTop: 4,
-  },
-  billRight: {
-    alignItems: 'flex-end',
-  },
-  billAmount: {
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  billStatus: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  billStatusOverdue: {
-    color: colors.red,
-  },
-  paidButton: {
+  goalStatus: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 7,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  goalStatusDone: {
+    color: colors.teal,
     backgroundColor: colors.tealSoft,
   },
-  paidButtonText: {
-    color: colors.teal,
-    fontSize: 11,
+  goalStatusOpen: {
+    color: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  progressTrack: {
+    height: 9,
+    borderRadius: 6,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 6,
+    backgroundColor: colors.teal,
+  },
+  goalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 10,
+  },
+  goalAmount: {
+    flex: 1,
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  goalRemaining: {
+    color: colors.muted,
+    fontSize: 12,
     fontWeight: '800',
+  },
+  deleteButton: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 7,
+    backgroundColor: colors.redSoft,
+  },
+  deleteButtonText: {
+    color: colors.red,
+    fontSize: 11,
+    fontWeight: '900',
   },
   modalBackdrop: {
     flex: 1,
@@ -618,12 +618,12 @@ const styles = StyleSheet.create({
     minHeight: 48,
     marginTop: 16,
     borderRadius: radii.lg,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCloseText: {
-    color: colors.surface,
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '900',
   },

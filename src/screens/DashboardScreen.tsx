@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -12,15 +12,15 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import type {FinancialSummary, TransactionCategory} from '../types/FinancialTransaction';
+import type {FinancialSummary, SavingsGoal, TransactionCategory} from '../types/FinancialTransaction';
 import {useFinancialSummary} from '../hooks/useTransactions';
 import {formatCurrency} from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
 import {analyzeFinance, type AiAnalysisResult, type AiFinding} from '../services/BackendApi';
 import {buildAiAnalysisPayload} from '../services/ReportPayloadService';
+import {FinancialStorage} from '../storage/FinancialStorage';
 
 const monthlyBudget = 5000000;
-const goalTarget = 12000000;
 
 export default function DashboardScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
@@ -32,11 +32,26 @@ export default function DashboardScreen(): React.JSX.Element {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<AiAnalysisResult | null>(null);
+  const [goals, setGoals] = useState<SavingsGoal[]>([]);
+  const [allTimeSaving, setAllTimeSaving] = useState(0);
+
+  const loadGoalState = useCallback(async () => {
+    const [storedGoals, allSummary] = await Promise.all([
+      FinancialStorage.getAllGoals(),
+      FinancialStorage.calculateFinancialSummary('all'),
+    ]);
+    setGoals(storedGoals.filter(goal => !goal.isArchived).sort((a, b) => a.targetDate - b.targetDate));
+    setAllTimeSaving(Math.max(allSummary.netCashFlow, 0));
+  }, []);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    refresh().finally(() => setRefreshing(false));
-  }, [refresh]);
+    Promise.all([refresh(), loadGoalState()]).finally(() => setRefreshing(false));
+  }, [loadGoalState, refresh]);
+
+  useEffect(() => {
+    loadGoalState().catch(() => undefined);
+  }, [loadGoalState, summary]);
 
   const handleAnalyzeAi = async () => {
     setAiModalVisible(true);
@@ -57,8 +72,10 @@ export default function DashboardScreen(): React.JSX.Element {
   };
 
   const budgetUsed = summary ? Math.min(summary.totalExpense / monthlyBudget, 1) : 0;
-  const savedAmount = summary ? Math.max(summary.netCashFlow, 0) : 0;
-  const goalProgress = Math.min(savedAmount / goalTarget, 1);
+  const primaryGoal = goals[0];
+  const goalProgress = primaryGoal && primaryGoal.targetAmount > 0
+    ? Math.min(allTimeSaving / primaryGoal.targetAmount, 1)
+    : 0;
 
   return (
     <View style={styles.container}>
@@ -117,13 +134,13 @@ export default function DashboardScreen(): React.JSX.Element {
 
             <SectionHeader title="Goals" action={`${Math.round(goalProgress * 100)}%`} />
             <GoalCard
-              title="Emergency Fund"
-              target={goalTarget}
-              current={savedAmount}
+              goal={primaryGoal}
+              currentSaving={allTimeSaving}
               progress={goalProgress}
+              onPress={() => navigation.navigate('Bills')}
             />
 
-            <SaveCard balance={savedAmount} />
+            <SaveCard balance={allTimeSaving} />
 
             <RecentCategories categories={summary.topExpenseCategories} />
           </>
@@ -316,32 +333,40 @@ function SpendingOverview({
 }
 
 function GoalCard({
-  title,
-  target,
-  current,
+  goal,
+  currentSaving,
   progress,
+  onPress,
 }: {
-  title: string;
-  target: number;
-  current: number;
+  goal?: SavingsGoal;
+  currentSaving: number;
   progress: number;
+  onPress(): void;
 }) {
-  const monthlyNeed = Math.max(Math.ceil((target - current) / 6), 0);
+  const target = goal?.targetAmount ?? 0;
+  const current = goal ? Math.min(currentSaving, goal.targetAmount) : 0;
+  const remaining = Math.max(target - currentSaving, 0);
+  const achieved = Boolean(goal && currentSaving >= goal.targetAmount);
+
   return (
-    <View style={styles.goalCard}>
+    <Pressable style={styles.goalCard} onPress={onPress}>
       <View style={styles.goalBadge}>
         <Text style={styles.goalBadgeText}>GO</Text>
       </View>
       <View style={styles.goalMain}>
-        <Text style={styles.goalTitle}>{title}</Text>
-        <Text style={styles.goalTarget}>Target {formatCurrency(target)}</Text>
+        <Text style={styles.goalTitle}>{goal?.name ?? 'Belum ada goal'}</Text>
+        <Text style={styles.goalTarget}>
+          {goal ? `Target ${formatCurrency(target)}` : 'Tap untuk setup target tabungan'}
+        </Text>
         <ProgressBar progress={progress} color={colors.teal} />
         <View style={styles.goalFooter}>
           <Text style={styles.goalCurrent}>{formatCurrency(current)}</Text>
-          <Text style={styles.goalNeed}>{formatCurrency(monthlyNeed)}/mo</Text>
+          <Text style={styles.goalNeed}>
+            {goal ? achieved ? 'Berhasil' : `Kurang ${formatCurrency(remaining)}` : 'Setup'}
+          </Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -351,7 +376,7 @@ function SaveCard({balance}: {balance: number}) {
       <View>
         <Text style={styles.saveLabel}>VIP Save</Text>
         <Text style={styles.saveTitle}>Smart saving pocket</Text>
-        <Text style={styles.saveText}>Estimate yield and separate money for goals.</Text>
+        <Text style={styles.saveText}>Net saving dari seluruh transaksi.</Text>
       </View>
       <View style={styles.saveAmountWrap}>
         <Text style={styles.saveAmount}>{formatCurrency(balance)}</Text>
