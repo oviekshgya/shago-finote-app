@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import RootNavigator from './src/navigation/RootNavigator';
 import NotificationModule from './src/native/NotificationModule';
-import { ShagoAds } from './src/shago-ads';
+import {ShagoAds} from '@shago/ads';
 import { TransactionCaptureService } from './src/services/TransactionCaptureService';
 
 function AutoShagoAds(): null {

@@ -1,0 +1,13 @@
+{
+  "name": "@shago/ads",
+  "version": "0.1.0",
+  "description": "Shago Ads SDK bridge for Shago React Native apps",
+  "main": "src/index.ts",
+  "react-native": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-google-mobile-ads": "^16.4.0"
+  }
+}

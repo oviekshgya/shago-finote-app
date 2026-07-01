@@ -18,7 +18,7 @@ import {formatCurrency} from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
 import {analyzeFinance, type AiAnalysisResult, type AiFinding} from '../services/BackendApi';
 import {buildAiAnalysisPayload} from '../services/ReportPayloadService';
-import {ShagoBannerAd} from '../shago-ads';
+import {ShagoBannerAd} from '@shago/ads';
 import {FinancialStorage} from '../storage/FinancialStorage';
 
 const monthlyBudget = 5000000;
