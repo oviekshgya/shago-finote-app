@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -15,6 +16,8 @@ import type {FinancialSummary, TransactionCategory} from '../types/FinancialTran
 import {useFinancialSummary} from '../hooks/useTransactions';
 import {formatCurrency} from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
+import {analyzeFinance, type AiAnalysisResult, type AiFinding} from '../services/BackendApi';
+import {buildAiAnalysisPayload} from '../services/ReportPayloadService';
 
 const monthlyBudget = 5000000;
 const goalTarget = 12000000;
@@ -25,11 +28,33 @@ export default function DashboardScreen(): React.JSX.Element {
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
   const {summary, loading, refresh} = useFinancialSummary(period);
   const [refreshing, setRefreshing] = useState(false);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiResult, setAiResult] = useState<AiAnalysisResult | null>(null);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     refresh().finally(() => setRefreshing(false));
   }, [refresh]);
+
+  const handleAnalyzeAi = async () => {
+    setAiModalVisible(true);
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const payload = await buildAiAnalysisPayload({
+        periodType: period,
+        prompt: 'Analisis apakah saya sudah hemat atau boros. Berikan saran agar pengeluaran saya lebih irit berdasarkan transaksi ini.',
+      });
+      const result = await analyzeFinance(payload);
+      setAiResult(result);
+    } catch (error) {
+      setAiError(String(error));
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const budgetUsed = summary ? Math.min(summary.totalExpense / monthlyBudget, 1) : 0;
   const savedAmount = summary ? Math.max(summary.netCashFlow, 0) : 0;
@@ -114,6 +139,27 @@ export default function DashboardScreen(): React.JSX.Element {
           </View>
         )}
       </ScrollView>
+
+      {summary ? (
+        <>
+          <Pressable
+            style={[styles.aiFab, {bottom: Math.max(insets.bottom, 12) + 78}]}
+            onPress={handleAnalyzeAi}>
+            <Text style={styles.aiFabIcon}>AI</Text>
+            <Text style={styles.aiFabText}>Analyze AI</Text>
+          </Pressable>
+
+          <AiAnalysisModal
+            visible={aiModalVisible}
+            summary={summary}
+            budgetUsed={budgetUsed}
+            loading={aiLoading}
+            error={aiError}
+            result={aiResult}
+            onClose={() => setAiModalVisible(false)}
+          />
+        </>
+      ) : null}
     </View>
   );
 }
@@ -390,6 +436,166 @@ function ProgressBar({
       />
     </View>
   );
+}
+
+function AiAnalysisModal({
+  visible,
+  summary,
+  budgetUsed,
+  loading,
+  error,
+  result,
+  onClose,
+}: {
+  visible: boolean;
+  summary: FinancialSummary;
+  budgetUsed: number;
+  loading: boolean;
+  error: string | null;
+  result: AiAnalysisResult | null;
+  onClose(): void;
+}) {
+  const fallback = buildMockAiAnalysis(summary, budgetUsed);
+  const score = result?.financialScore.score ?? fallback.score;
+  const maxScore = result?.financialScore.maxScore ?? 100;
+  const percentage = result?.financialScore.percentage ?? score;
+  const scoreColor = result
+    ? score >= 75 ? colors.teal : score >= 55 ? colors.orange : colors.red
+    : fallback.scoreColor;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.aiSheet}>
+          <View style={styles.modalHandle} />
+          {loading ? (
+            <View style={styles.aiLoadingState}>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={styles.aiTitle}>Menganalisis keuangan...</Text>
+              <Text style={styles.aiSummary}>Backend sedang membaca transaksi, goals, dan bills periode ini.</Text>
+              <View style={styles.aiLoadingBar}>
+                <View style={styles.aiLoadingFill} />
+              </View>
+            </View>
+          ) : error ? (
+            <View style={styles.aiLoadingState}>
+              <Text style={styles.aiTitle}>Analisis gagal</Text>
+              <Text style={styles.aiSummary}>{error}</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalEyebrow}>{result?.model ? `Model ${result.model}` : 'AI assessment'}</Text>
+              <Text style={styles.aiTitle}>{result?.title ?? fallback.title}</Text>
+              <Text style={styles.aiSummary}>{result?.description ?? fallback.summary}</Text>
+
+              <View style={styles.aiScoreCard}>
+                <Text style={styles.aiScoreLabel}>{result?.financialScore.label ?? 'Financial score'}</Text>
+                <Text style={styles.aiScoreValue}>{score}/{maxScore}</Text>
+                <Text style={styles.aiScoreDesc}>{result?.financialScore.description ?? ''}</Text>
+                <ProgressBar progress={percentage / 100} color={scoreColor} />
+              </View>
+
+              <View style={styles.aiMetrics}>
+                <AiMetric label="Income" value={result?.summaryCards.income.text ?? formatCurrency(summary.totalIncome)} />
+                <AiMetric label="Expense" value={result?.summaryCards.expense.text ?? formatCurrency(summary.totalExpense)} />
+                <AiMetric label="Net" value={result?.summaryCards.net.text ?? formatCurrency(summary.netCashFlow)} />
+              </View>
+
+              {result?.potentialSaving ? (
+                <View style={styles.potentialSavingCard}>
+                  <Text style={styles.aiScoreLabel}>Potential saving</Text>
+                  <Text style={styles.potentialSavingAmount}>{result.potentialSaving.text}</Text>
+                  <Text style={styles.aiSummary}>{result.potentialSaving.description}</Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.aiSectionTitle}>Key findings</Text>
+              {toFindingRows(result?.keyFindings, fallback.findings).map(item => (
+                <AiFindingRow key={`${item.title}-${item.description}`} item={item} />
+              ))}
+
+              <Text style={styles.aiSectionTitle}>Recommended actions</Text>
+              {toFindingRows(result?.recommendedActions, fallback.actions).map(item => (
+                <AiFindingRow key={`${item.title}-${item.description}`} item={item} />
+              ))}
+            </ScrollView>
+          )}
+
+          <Pressable style={styles.modalCloseButton} onPress={onClose}>
+            <Text style={styles.modalCloseText}>Tutup</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function AiMetric({label, value}: {label: string; value: string}) {
+  return (
+    <View style={styles.aiMetricCard}>
+      <Text style={styles.aiMetricLabel}>{label}</Text>
+      <Text style={styles.aiMetricValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function AiFindingRow({item}: {item: AiFinding}) {
+  return (
+    <View style={styles.aiBulletRow}>
+      <View style={styles.aiBulletDot} />
+      <View style={styles.aiFindingCopy}>
+        <Text style={styles.aiFindingTitle}>{item.title}</Text>
+        <Text style={styles.aiBulletText}>{item.description}</Text>
+      </View>
+    </View>
+  );
+}
+
+function toFindingRows(apiRows: AiFinding[] | undefined, fallbackRows: string[]): AiFinding[] {
+  if (apiRows && apiRows.length > 0) {
+    return apiRows;
+  }
+  return fallbackRows.map(text => ({title: text, description: ''}));
+}
+
+function buildMockAiAnalysis(summary: FinancialSummary, budgetUsed: number) {
+  const savingsRate = summary.totalIncome > 0 ? summary.netCashFlow / summary.totalIncome : 0;
+  const topExpense = summary.topExpenseCategories[0];
+  const topExpenseLabel = topExpense ? formatCategoryLabel(topExpense.category) : 'belum ada kategori dominan';
+
+  const score = Math.max(
+    25,
+    Math.min(
+      95,
+      Math.round(70 + savingsRate * 30 - Math.max(0, budgetUsed - 0.8) * 40),
+    ),
+  );
+
+  const status =
+    summary.netCashFlow >= 0
+      ? 'Cashflow periode ini masih positif.'
+      : 'Cashflow periode ini negatif dan perlu dikendalikan.';
+
+  return {
+    score,
+    scoreColor: score >= 75 ? colors.teal : score >= 55 ? colors.orange : colors.red,
+    title: score >= 75 ? 'Keuangan cukup sehat' : score >= 55 ? 'Keuangan perlu dijaga' : 'Keuangan perlu perhatian',
+    summary: `${status} Pengeluaran terbesar ada di ${topExpenseLabel}.`,
+    findings: [
+      `Income tercatat ${formatCurrency(summary.totalIncome)} dan expense ${formatCurrency(summary.totalExpense)}.`,
+      `Net cashflow periode ini ${formatCurrency(summary.netCashFlow)}.`,
+      `Budget terpakai sekitar ${Math.round(budgetUsed * 100)}% dari asumsi budget bulanan.`,
+    ],
+    actions: [
+      summary.netCashFlow < 0
+        ? 'Kurangi transaksi non-prioritas sampai cashflow kembali positif.'
+        : 'Pertahankan cashflow positif dan sisihkan sebagian ke dana darurat.',
+      topExpense
+        ? `Review kategori ${topExpenseLabel} karena menjadi pengeluaran terbesar.`
+        : 'Tambahkan lebih banyak data transaksi agar analisis kategori lebih akurat.',
+      'Integrasi backend nanti bisa mengganti mock ini dengan rekomendasi AI berbasis histori lengkap.',
+    ],
+  };
 }
 
 function formatCategoryLabel(category: TransactionCategory): string {
@@ -874,6 +1080,201 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.surface,
+    fontWeight: '900',
+  },
+  aiFab: {
+    position: 'absolute',
+    right: 18,
+    minHeight: 52,
+    borderRadius: 26,
+    paddingLeft: 12,
+    paddingRight: 16,
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    ...shadow,
+  },
+  aiFabIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.surface,
+    color: colors.primary,
+    textAlign: 'center',
+    lineHeight: 30,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  aiFabText: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(25,21,45,0.38)',
+  },
+  aiSheet: {
+    maxHeight: '88%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: colors.surface,
+    padding: 18,
+    paddingBottom: 24,
+  },
+  modalHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalEyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  aiTitle: {
+    color: colors.ink,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  aiSummary: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  aiScoreCard: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: radii.xl,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 10,
+  },
+  aiScoreLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  aiScoreValue: {
+    color: colors.ink,
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  aiScoreDesc: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  aiLoadingState: {
+    minHeight: 260,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  aiLoadingBar: {
+    width: '100%',
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceSoft,
+    marginTop: 18,
+    overflow: 'hidden',
+  },
+  aiLoadingFill: {
+    width: '76%',
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  aiMetrics: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  aiMetricCard: {
+    flex: 1,
+    minHeight: 68,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primarySoft,
+    padding: 10,
+    justifyContent: 'center',
+  },
+  aiMetricLabel: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '900',
+    marginBottom: 5,
+  },
+  aiMetricValue: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  aiSectionTitle: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '900',
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  aiBulletRow: {
+    flexDirection: 'row',
+    gap: 9,
+    alignItems: 'flex-start',
+    marginBottom: 9,
+  },
+  aiBulletDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.primary,
+    marginTop: 6,
+  },
+  aiBulletText: {
+    flex: 1,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  aiFindingCopy: {
+    flex: 1,
+  },
+  aiFindingTitle: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+    marginBottom: 3,
+  },
+  potentialSavingCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: radii.xl,
+    backgroundColor: colors.tealSoft,
+  },
+  potentialSavingAmount: {
+    color: colors.teal,
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  modalCloseButton: {
+    minHeight: 48,
+    marginTop: 16,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    color: colors.surface,
+    fontSize: 14,
     fontWeight: '900',
   },
 });

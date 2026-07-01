@@ -21,6 +21,8 @@ import {
   groupTransactionsByDate,
 } from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
+import {exportTransactions} from '../services/BackendApi';
+import {buildReportPayloadFromTransactions} from '../services/ReportPayloadService';
 
 export default function TransactionsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
@@ -28,6 +30,8 @@ export default function TransactionsScreen(): React.JSX.Element {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState('Menyiapkan payload report...');
 
   const filtered = transactions
     .filter(t => {
@@ -89,14 +93,48 @@ export default function TransactionsScreen(): React.JSX.Element {
     );
   };
 
+  const handleExport = async () => {
+    if (filtered.length === 0) {
+      Alert.alert('Tidak ada data', 'Belum ada transaksi yang bisa diexport.');
+      return;
+    }
+
+    setExporting(true);
+    setExportProgress('Menyiapkan payload report...');
+    try {
+      const payload = buildReportPayloadFromTransactions({
+        transactions: filtered,
+        periodType: 'all',
+        format: 'excel',
+        emailTo: ['oviekshgy@gmail.com'],
+      });
+      setExportProgress('Mengirim report ke backend...');
+      const result = await exportTransactions(payload);
+      setExportProgress('Report berhasil dikirim ke email.');
+      Alert.alert(
+        'Export berhasil',
+        `${result.filename} dikirim ke ${result.sentTo.join(', ')}`,
+      );
+    } catch (error) {
+      Alert.alert('Export gagal', String(error));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <View style={[styles.container, {paddingTop: Math.max(insets.top, 16)}]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Insights</Text>
-        <Text style={styles.title}>Spending details</Text>
-        <Text style={styles.subtitle}>{filtered.length} transaksi ditemukan</Text>
+        <View style={styles.headerCopy}>
+          <Text style={styles.eyebrow}>Insights</Text>
+          <Text style={styles.title}>Spending details</Text>
+          <Text style={styles.subtitle}>{filtered.length} transaksi ditemukan</Text>
+        </View>
+        <Pressable style={styles.exportButton} onPress={handleExport} disabled={exporting}>
+          <Text style={styles.exportButtonText}>{exporting ? 'Exporting' : 'Export'}</Text>
+        </Pressable>
       </View>
 
       <View style={styles.summaryRow}>
@@ -168,7 +206,31 @@ export default function TransactionsScreen(): React.JSX.Element {
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
       />
+      <ExportLoadingModal visible={exporting} progressText={exportProgress} />
     </View>
+  );
+}
+
+function ExportLoadingModal({
+  visible,
+  progressText,
+}: {
+  visible: boolean;
+  progressText: string;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.loadingBackdrop}>
+        <View style={styles.exportModal}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={styles.exportModalTitle}>Export report</Text>
+          <Text style={styles.exportModalText}>{progressText}</Text>
+          <View style={styles.exportProgressTrack}>
+            <View style={styles.exportProgressFill} />
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -316,9 +378,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
     paddingHorizontal: 18,
     paddingTop: 8,
     paddingBottom: 12,
+  },
+  headerCopy: {
+    flex: 1,
   },
   eyebrow: {
     color: colors.primary,
@@ -335,6 +404,19 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     color: colors.muted,
+  },
+  exportButton: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportButtonText: {
+    color: colors.surface,
+    fontSize: 12,
+    fontWeight: '900',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -604,5 +686,47 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: 14,
     fontWeight: '900',
+  },
+  loadingBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(25,21,45,0.38)',
+    padding: 24,
+  },
+  exportModal: {
+    width: '100%',
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  exportModalTitle: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 14,
+  },
+  exportModalText: {
+    color: colors.muted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  exportProgressTrack: {
+    width: '100%',
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceSoft,
+    marginTop: 16,
+    overflow: 'hidden',
+  },
+  exportProgressFill: {
+    width: '72%',
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
 });
