@@ -5,7 +5,7 @@ buildscript {
         compileSdkVersion = 35
         targetSdkVersion = 35
         ndkVersion = "26.1.10909125"
-        kotlinVersion = "1.9.24"
+        kotlinVersion = "2.0.0"
     }
     repositories {
         google()
@@ -19,3 +19,20 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    repositories.configureEach { repository ->
+        if (repository instanceof MavenArtifactRepository &&
+            repository.url.toString() == "https://oss.sonatype.org/content/repositories/snapshots/") {
+            repository.content {
+                includeGroup("com.facebook.react")
+            }
+        }
+    }
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            freeCompilerArgs += ["-Xskip-metadata-version-check"]
+        }
+    }
+}

@@ -1,4 +1,7 @@
 {
-  "name": "NotifListenerMVP",
-  "displayName": "Shago Finote"
+	"name": "NotifListenerMVP",
+	"displayName": "Shago Finote",
+	"react-native-google-mobile-ads": {
+		"android_app_id": "ca-app-pub-6656393838608208~4245169206"
+	}
 }

@@ -18,6 +18,7 @@ import {formatCurrency} from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
 import {analyzeFinance, type AiAnalysisResult, type AiFinding} from '../services/BackendApi';
 import {buildAiAnalysisPayload} from '../services/ReportPayloadService';
+import {ShagoBannerAd} from '../shago-ads';
 import {FinancialStorage} from '../storage/FinancialStorage';
 
 const monthlyBudget = 5000000;
@@ -105,6 +106,10 @@ export default function DashboardScreen(): React.JSX.Element {
         </View>
 
         <PeriodSelector value={period} onChange={setPeriod} />
+
+        <View style={styles.bannerAdContainer}>
+          <ShagoBannerAd />
+        </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -714,6 +719,11 @@ const styles = StyleSheet.create({
     minHeight: 360,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bannerAdContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    minHeight: 50,
   },
   balanceCard: {
     borderRadius: radii.xl,
