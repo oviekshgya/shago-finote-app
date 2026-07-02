@@ -451,9 +451,33 @@ export class FinancialStorage {
 
     const sourceMap: Record<string, FinancialSummary['sourceSummary'][number]> = {};
 
+    transactions
+      .filter(t => t.date <= endDate)
+      .forEach(t => {
+        const sourceName = formatTransactionSourceName(t);
+        const sourceKey = buildTransactionSourceKey(t, sourceName);
+        if (!sourceMap[sourceKey]) {
+          sourceMap[sourceKey] = {
+            sourceName,
+            sourcePackageName: t.sourcePackageName,
+            sourceType: t.sourceType,
+            income: 0,
+            expense: 0,
+            net: 0,
+            balance: 0,
+            count: 0,
+          };
+        }
+        if (t.type === 'income') {
+          sourceMap[sourceKey].balance += t.amount;
+        } else if (t.type === 'expense') {
+          sourceMap[sourceKey].balance -= t.amount;
+        }
+      });
+
     filtered.forEach(t => {
       const sourceName = formatTransactionSourceName(t);
-      const sourceKey = `${t.sourceType}:${t.sourcePackageName ?? sourceName}`;
+      const sourceKey = buildTransactionSourceKey(t, sourceName);
       if (!sourceMap[sourceKey]) {
         sourceMap[sourceKey] = {
           sourceName,
@@ -462,6 +486,7 @@ export class FinancialStorage {
           income: 0,
           expense: 0,
           net: 0,
+          balance: 0,
           count: 0,
         };
       }
@@ -483,7 +508,10 @@ export class FinancialStorage {
 
     summary.netCashFlow = summary.totalIncome - summary.totalExpense;
     summary.sourceSummary = Object.values(sourceMap)
-      .sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
+      .sort((a, b) => {
+        const activityDiff = (b.income + b.expense) - (a.income + a.expense);
+        return activityDiff !== 0 ? activityDiff : Math.abs(b.balance) - Math.abs(a.balance);
+      });
 
     // Top categories
     summary.topExpenseCategories = Object.entries(summary.expenseByCategory)
@@ -611,5 +639,9 @@ function formatTransactionSourceName(transaction: FinancialTransaction): string 
   if (transaction.sourcePackageName?.trim()) {
     return transaction.sourcePackageName.trim();
   }
-  return transaction.sourceType === 'manual' ? 'Manual Entry' : 'Auto Capture';
+  return transaction.sourceType === 'manual' ? 'Input Manual' : 'Auto Capture';
+}
+
+function buildTransactionSourceKey(transaction: FinancialTransaction, sourceName: string): string {
+  return `${transaction.sourceType}:${transaction.sourcePackageName ?? sourceName}`;
 }

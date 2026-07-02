@@ -3,7 +3,7 @@
  * Form input transaksi manual.
  */
 
-import React, {useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -20,6 +20,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {FinancialStorage} from '../storage/FinancialStorage';
 import type {FinancialTransaction, TransactionCategory, TransactionType} from '../types/FinancialTransaction';
 import {colors, radii, shadow} from '../theme/finoteTheme';
+import type {CaptureRule} from '../types/CaptureRule';
 
 const categories: Array<{value: TransactionCategory; label: string}> = [
   {value: 'food', label: 'Makanan'},
@@ -36,14 +37,40 @@ const categories: Array<{value: TransactionCategory; label: string}> = [
   {value: 'other', label: 'Lainnya'},
 ];
 
+type SourceOption = {
+  label: string;
+  packageName?: string;
+};
+
+const fallbackSourceOptions: SourceOption[] = [
+  {label: 'Cash / Manual'},
+];
+
 export default function AddTransactionScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [merchant, setMerchant] = useState('');
+  const [source, setSource] = useState<SourceOption>(fallbackSourceOptions[0]);
+  const [sourceOptions, setSourceOptions] = useState<SourceOption[]>(fallbackSourceOptions);
   const [category, setCategory] = useState<TransactionCategory>('other');
   const [saving, setSaving] = useState(false);
+
+  const loadSourceOptions = useCallback(async () => {
+    const rules = await FinancialStorage.getCaptureRules();
+    const activeSources = rules
+      .filter(rule => rule.enabled)
+      .map(ruleToSourceOption);
+    setSourceOptions([...activeSources, ...fallbackSourceOptions]);
+    if (source.packageName && !activeSources.some(item => item.packageName === source.packageName)) {
+      setSource(fallbackSourceOptions[0]);
+    }
+  }, [source.packageName]);
+
+  useEffect(() => {
+    loadSourceOptions().catch(() => undefined);
+  }, [loadSourceOptions]);
 
   const handleAmountChange = (value: string) => {
     setAmount(formatRupiahInput(value));
@@ -59,11 +86,12 @@ export default function AddTransactionScreen(): React.JSX.Element {
       Alert.alert('Catatan wajib diisi', 'Masukkan judul atau catatan transaksi.');
       return;
     }
-
     const now = Date.now();
     const transaction: FinancialTransaction = {
       id: `manual-${now}`,
       sourceType: 'manual',
+      sourceApp: source.label,
+      sourcePackageName: source.packageName,
       type,
       status: 'completed',
       category,
@@ -84,6 +112,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
       setAmount('');
       setDescription('');
       setMerchant('');
+      setSource(fallbackSourceOptions[0]);
       setCategory('other');
       setType('expense');
       Alert.alert('Transaksi tersimpan', 'Transaksi manual berhasil ditambahkan.');
@@ -151,6 +180,37 @@ export default function AddTransactionScreen(): React.JSX.Element {
           />
         </Field>
 
+        <Text style={styles.fieldLabel}>Source</Text>
+        <View style={styles.sourceGrid}>
+          {sourceOptions.map(item => (
+            <Pressable
+              key={item.packageName ?? item.label}
+              style={[
+                styles.sourceButton,
+                isSameSource(source, item) && styles.sourceButtonActive,
+              ]}
+              onPress={() => setSource(item)}>
+              <Text
+                style={[
+                  styles.sourceText,
+                  isSameSource(source, item) && styles.sourceTextActive,
+                ]}>
+                {item.label}
+              </Text>
+              {item.packageName ? (
+                <Text
+                  style={[
+                    styles.sourcePackage,
+                    isSameSource(source, item) && styles.sourcePackageActive,
+                  ]}
+                  numberOfLines={1}>
+                  {item.packageName}
+                </Text>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+
         <Text style={styles.fieldLabel}>Kategori</Text>
         <View style={styles.categoryGrid}>
           {categories.map(item => (
@@ -191,6 +251,17 @@ function formatRupiahInput(value: string): string {
     return '';
   }
   return `Rp ${Number(digits).toLocaleString('id-ID')}`;
+}
+
+function ruleToSourceOption(rule: CaptureRule): SourceOption {
+  return {
+    label: rule.appLabel,
+    packageName: rule.packageName,
+  };
+}
+
+function isSameSource(left: SourceOption, right: SourceOption): boolean {
+  return (left.packageName ?? left.label) === (right.packageName ?? right.label);
 }
 
 const styles = StyleSheet.create({
@@ -285,6 +356,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: colors.ink,
     fontSize: 14,
+  },
+  sourceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  sourceButton: {
+    minWidth: '46%',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sourceButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  sourceText: {
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  sourceTextActive: {
+    color: colors.surface,
+  },
+  sourcePackage: {
+    marginTop: 3,
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    maxWidth: 142,
+  },
+  sourcePackageActive: {
+    color: '#ddd5ff',
   },
   categoryGrid: {
     flexDirection: 'row',

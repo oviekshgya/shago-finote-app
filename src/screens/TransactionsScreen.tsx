@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,17 @@ import {
 import {colors, radii, shadow} from '../theme/finoteTheme';
 import {exportTransactions} from '../services/BackendApi';
 import {buildReportPayloadFromTransactions, type ExportFormat} from '../services/ReportPayloadService';
+import {FinancialStorage} from '../storage/FinancialStorage';
+import type {CaptureRule} from '../types/CaptureRule';
+
+type SourceOption = {
+  label: string;
+  packageName?: string;
+};
+
+const fallbackSourceOptions: SourceOption[] = [
+  {label: 'Cash / Manual'},
+];
 
 export default function TransactionsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
@@ -35,12 +46,27 @@ export default function TransactionsScreen(): React.JSX.Element {
   const [exportEmail, setExportEmail] = useState('');
   const [exportFormat, setExportFormat] = useState<ExportFormat>('excel');
   const [exportFormVisible, setExportFormVisible] = useState(false);
+  const [sourceModalVisible, setSourceModalVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null);
   const [editType, setEditType] = useState<TransactionType>('expense');
   const [editCategory, setEditCategory] = useState<TransactionCategory>('other');
   const [editAmount, setEditAmount] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editMerchant, setEditMerchant] = useState('');
+  const [editSource, setEditSource] = useState<SourceOption>(fallbackSourceOptions[0]);
+  const [sourceOptions, setSourceOptions] = useState<SourceOption[]>(fallbackSourceOptions);
+
+  const loadSourceOptions = useCallback(async () => {
+    const rules = await FinancialStorage.getCaptureRules();
+    setSourceOptions([
+      ...rules.filter(rule => rule.enabled).map(ruleToSourceOption),
+      ...fallbackSourceOptions,
+    ]);
+  }, []);
+
+  useEffect(() => {
+    loadSourceOptions().catch(() => undefined);
+  }, [loadSourceOptions]);
 
   const filtered = transactions
     .filter(t => {
@@ -80,7 +106,7 @@ export default function TransactionsScreen(): React.JSX.Element {
     items,
   }));
 
-  const sourceSummary = useMemo(() => buildSourceSummary(filtered), [filtered]);
+  const sourceSummary = useMemo(() => buildSourceSummary(filtered, transactions), [filtered, transactions]);
 
   const confirmDelete = (transaction: FinancialTransaction) => {
     Alert.alert(
@@ -121,6 +147,7 @@ export default function TransactionsScreen(): React.JSX.Element {
     setEditAmount(formatRupiahInput(String(transaction.amount)));
     setEditDescription(transaction.description);
     setEditMerchant(transaction.merchant ?? '');
+    setEditSource(transactionToSourceOption(transaction));
   };
 
   const handleSaveEdit = async () => {
@@ -144,6 +171,8 @@ export default function TransactionsScreen(): React.JSX.Element {
         amount: numericAmount,
         description: editDescription.trim(),
         merchant: editMerchant.trim() || undefined,
+        sourceApp: editSource.label,
+        sourcePackageName: editSource.packageName,
         isVerified: true,
       });
       setSelectedTransaction(null);
@@ -204,7 +233,7 @@ export default function TransactionsScreen(): React.JSX.Element {
         <SummaryPill label="Expense" value={formatCurrency(totals.expense)} tone="pink" />
       </View>
 
-      <SourceSummaryCard sources={sourceSummary} />
+      <SourceSummaryCard sources={sourceSummary} onPress={() => setSourceModalVisible(true)} />
 
       <View style={styles.controlsContainer}>
         <TextInput
@@ -278,13 +307,21 @@ export default function TransactionsScreen(): React.JSX.Element {
         amount={editAmount}
         description={editDescription}
         merchant={editMerchant}
+        source={editSource}
+        sourceOptions={sourceOptions}
         onChangeType={setEditType}
         onChangeCategory={setEditCategory}
         onChangeAmount={value => setEditAmount(formatRupiahInput(value))}
         onChangeDescription={setEditDescription}
         onChangeMerchant={setEditMerchant}
+        onChangeSource={setEditSource}
         onClose={() => setEditingTransaction(null)}
         onSubmit={handleSaveEdit}
+      />
+      <SourceSummaryModal
+        visible={sourceModalVisible}
+        sources={sourceSummary}
+        onClose={() => setSourceModalVisible(false)}
       />
       <ExportFormModal
         visible={exportFormVisible}
@@ -439,21 +476,47 @@ type SourceSummaryItem = {
   income: number;
   expense: number;
   net: number;
+  balance: number;
   count: number;
 };
 
-function buildSourceSummary(transactions: FinancialTransaction[]): SourceSummaryItem[] {
+function buildSourceSummary(
+  visibleTransactions: FinancialTransaction[],
+  allTransactions: FinancialTransaction[],
+): SourceSummaryItem[] {
   const grouped = new Map<string, SourceSummaryItem>();
 
-  transactions.forEach(transaction => {
+  allTransactions.forEach(transaction => {
     const sourceName = getTransactionSourceName(transaction);
-    const key = `${transaction.sourceType}:${transaction.sourcePackageName ?? sourceName}`;
+    const key = buildTransactionSourceKey(transaction, sourceName);
     const current = grouped.get(key) ?? {
       sourceName,
       sourcePackageName: transaction.sourcePackageName,
       income: 0,
       expense: 0,
       net: 0,
+      balance: 0,
+      count: 0,
+    };
+    if (transaction.type === 'income') {
+      current.balance += transaction.amount;
+    }
+    if (transaction.type === 'expense') {
+      current.balance -= transaction.amount;
+    }
+    grouped.set(key, current);
+  });
+
+  visibleTransactions.forEach(transaction => {
+    const sourceName = getTransactionSourceName(transaction);
+    const key = buildTransactionSourceKey(transaction, sourceName);
+    const current = grouped.get(key) ?? {
+      sourceName,
+      sourcePackageName: transaction.sourcePackageName,
+      income: 0,
+      expense: 0,
+      net: 0,
+      balance: 0,
       count: 0,
     };
 
@@ -468,7 +531,10 @@ function buildSourceSummary(transactions: FinancialTransaction[]): SourceSummary
     grouped.set(key, current);
   });
 
-  return [...grouped.values()].sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
+  return [...grouped.values()].sort((a, b) => {
+    const activityDiff = (b.income + b.expense) - (a.income + a.expense);
+    return activityDiff !== 0 ? activityDiff : Math.abs(b.balance) - Math.abs(a.balance);
+  });
 }
 
 function getTransactionSourceName(transaction: FinancialTransaction): string {
@@ -478,38 +544,120 @@ function getTransactionSourceName(transaction: FinancialTransaction): string {
   if (transaction.sourcePackageName?.trim()) {
     return transaction.sourcePackageName.trim();
   }
-  return transaction.sourceType === 'manual' ? 'Manual Entry' : 'Auto Capture';
+  return transaction.sourceType === 'manual' ? 'Input Manual' : 'Auto Capture';
 }
 
-function SourceSummaryCard({sources}: {sources: SourceSummaryItem[]}) {
+function buildTransactionSourceKey(transaction: FinancialTransaction, sourceName: string): string {
+  return `${transaction.sourceType}:${transaction.sourcePackageName ?? sourceName}`;
+}
+
+function ruleToSourceOption(rule: CaptureRule): SourceOption {
+  return {
+    label: rule.appLabel,
+    packageName: rule.packageName,
+  };
+}
+
+function transactionToSourceOption(transaction: FinancialTransaction): SourceOption {
+  return {
+    label: getTransactionSourceName(transaction),
+    packageName: transaction.sourcePackageName,
+  };
+}
+
+function isSameSource(left: SourceOption, right: SourceOption): boolean {
+  return (left.packageName ?? left.label) === (right.packageName ?? right.label);
+}
+
+function SourceSummaryCard({
+  sources,
+  onPress,
+}: {
+  sources: SourceSummaryItem[];
+  onPress(): void;
+}) {
   if (sources.length === 0) {
     return null;
   }
+  const totals = sources.reduce(
+    (acc, item) => ({
+      balance: acc.balance + item.balance,
+      income: acc.income + item.income,
+      expense: acc.expense + item.expense,
+    }),
+    {balance: 0, income: 0, expense: 0},
+  );
 
   return (
-    <View style={styles.sourceSummaryCard}>
+    <Pressable style={styles.sourceSummaryCard} onPress={onPress}>
       <View style={styles.sourceSummaryHeader}>
         <View>
           <Text style={styles.sourceSummaryTitle}>Transaksi per source</Text>
-          <Text style={styles.sourceSummarySubtitle}>Income dan expense berdasarkan aplikasi</Text>
+          <Text style={styles.sourceSummarySubtitle}>{sources.length} source aktif, tekan untuk detail</Text>
+        </View>
+        <Text style={styles.sourceSummaryChevron}>›</Text>
+      </View>
+      <View style={styles.sourceCompactGrid}>
+        <View style={styles.sourceCompactBox}>
+          <Text style={styles.sourceCompactLabel}>Saldo</Text>
+          <Text style={styles.sourceCompactValue}>{formatCurrency(totals.balance)}</Text>
+        </View>
+        <View style={styles.sourceCompactBox}>
+          <Text style={styles.sourceCompactLabel}>Masuk</Text>
+          <Text style={[styles.sourceCompactValue, styles.sourceSummaryIncome]}>{formatCurrency(totals.income)}</Text>
+        </View>
+        <View style={styles.sourceCompactBox}>
+          <Text style={styles.sourceCompactLabel}>Keluar</Text>
+          <Text style={[styles.sourceCompactValue, styles.sourceSummaryExpense]}>{formatCurrency(totals.expense)}</Text>
         </View>
       </View>
-      {sources.slice(0, 5).map(source => (
-        <View key={`${source.sourcePackageName ?? source.sourceName}`} style={styles.sourceSummaryRow}>
-          <View style={styles.sourceSummaryAvatar}>
-            <Text style={styles.sourceSummaryAvatarText}>{source.sourceName.slice(0, 1).toUpperCase()}</Text>
-          </View>
-          <View style={styles.sourceSummaryCopy}>
-            <Text style={styles.sourceSummaryName} numberOfLines={1}>{source.sourceName}</Text>
-            <Text style={styles.sourceSummaryMeta}>{source.count} transaksi • Net {formatCurrency(source.net)}</Text>
-          </View>
-          <View style={styles.sourceSummaryAmounts}>
-            <Text style={styles.sourceSummaryIncome}>+{formatCurrency(source.income)}</Text>
-            <Text style={styles.sourceSummaryExpense}>-{formatCurrency(source.expense)}</Text>
-          </View>
-        </View>
-      ))}
-    </View>
+    </Pressable>
+  );
+}
+
+function SourceSummaryModal({
+  visible,
+  sources,
+  onClose,
+}: {
+  visible: boolean;
+  sources: SourceSummaryItem[];
+  onClose(): void;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={event => event.stopPropagation()}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalEyebrow}>Source summary</Text>
+          <Text style={styles.modalTitle}>Transaksi per source</Text>
+          <ScrollView style={styles.sourceModalList} showsVerticalScrollIndicator={false}>
+            {sources.map(source => (
+              <View key={`${source.sourcePackageName ?? source.sourceName}`} style={styles.sourceSummaryRow}>
+                <View style={styles.sourceSummaryAvatar}>
+                  <Text style={styles.sourceSummaryAvatarText}>{source.sourceName.slice(0, 1).toUpperCase()}</Text>
+                </View>
+                <View style={styles.sourceSummaryCopy}>
+                  <Text style={styles.sourceSummaryName} numberOfLines={1}>{source.sourceName}</Text>
+                  <Text style={styles.sourceSummaryMeta}>{source.count} transaksi periode ini</Text>
+                  {source.sourcePackageName ? (
+                    <Text style={styles.sourceSummaryPackage} numberOfLines={1}>{source.sourcePackageName}</Text>
+                  ) : null}
+                </View>
+                <View style={styles.sourceSummaryAmounts}>
+                  <Text style={styles.sourceSummaryBalance}>Saldo {formatCurrency(source.balance)}</Text>
+                  <Text style={styles.sourceSummaryIncome}>+{formatCurrency(source.income)}</Text>
+                  <Text style={styles.sourceSummaryExpense}>-{formatCurrency(source.expense)}</Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          <Pressable style={styles.modalCloseButton} onPress={onClose}>
+            <Text style={styles.modalCloseText}>Tutup</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -588,11 +736,14 @@ function TransactionEditModal({
   amount,
   description,
   merchant,
+  source,
+  sourceOptions,
   onChangeType,
   onChangeCategory,
   onChangeAmount,
   onChangeDescription,
   onChangeMerchant,
+  onChangeSource,
   onClose,
   onSubmit,
 }: {
@@ -602,11 +753,14 @@ function TransactionEditModal({
   amount: string;
   description: string;
   merchant: string;
+  source: SourceOption;
+  sourceOptions: SourceOption[];
   onChangeType(value: TransactionType): void;
   onChangeCategory(value: TransactionCategory): void;
   onChangeAmount(value: string): void;
   onChangeDescription(value: string): void;
   onChangeMerchant(value: string): void;
+  onChangeSource(value: SourceOption): void;
   onClose(): void;
   onSubmit(): void;
 }) {
@@ -664,6 +818,37 @@ function TransactionEditModal({
               placeholder="Nama merchant atau sumber"
               placeholderTextColor={colors.faint}
             />
+
+            <Text style={styles.editLabel}>Source</Text>
+            <View style={styles.sourcePickerGrid}>
+              {sourceOptions.map(item => (
+                <Pressable
+                  key={item.packageName ?? item.label}
+                  style={[
+                    styles.sourcePickerButton,
+                    isSameSource(source, item) && styles.sourcePickerButtonActive,
+                  ]}
+                  onPress={() => onChangeSource(item)}>
+                  <Text
+                    style={[
+                      styles.sourcePickerText,
+                      isSameSource(source, item) && styles.sourcePickerTextActive,
+                    ]}>
+                    {item.label}
+                  </Text>
+                  {item.packageName ? (
+                    <Text
+                      style={[
+                        styles.sourcePickerPackage,
+                        isSameSource(source, item) && styles.sourcePickerPackageActive,
+                      ]}
+                      numberOfLines={1}>
+                      {item.packageName}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
 
             <Text style={styles.editLabel}>Kategori</Text>
             <View style={styles.categoryWrap}>
@@ -875,6 +1060,10 @@ const styles = StyleSheet.create({
   },
   sourceSummaryHeader: {
     marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
   },
   sourceSummaryTitle: {
     color: colors.ink,
@@ -885,6 +1074,41 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 11,
     marginTop: 3,
+  },
+  sourceSummaryChevron: {
+    color: colors.primary,
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 26,
+  },
+  sourceCompactGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  sourceCompactBox: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 9,
+    justifyContent: 'center',
+  },
+  sourceCompactLabel: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  sourceCompactValue: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  sourceModalList: {
+    marginTop: 12,
+    maxHeight: 430,
   },
   sourceSummaryRow: {
     flexDirection: 'row',
@@ -919,9 +1143,21 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 11,
   },
+  sourceSummaryPackage: {
+    marginTop: 2,
+    color: colors.faint,
+    fontSize: 10,
+    fontWeight: '700',
+  },
   sourceSummaryAmounts: {
     alignItems: 'flex-end',
-    minWidth: 92,
+    minWidth: 112,
+  },
+  sourceSummaryBalance: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 3,
   },
   sourceSummaryIncome: {
     color: colors.teal,
@@ -1275,6 +1511,43 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 14,
+  },
+  sourcePickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sourcePickerButton: {
+    minWidth: '46%',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sourcePickerButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  sourcePickerText: {
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  sourcePickerTextActive: {
+    color: colors.surface,
+  },
+  sourcePickerPackage: {
+    marginTop: 3,
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    maxWidth: 138,
+  },
+  sourcePickerPackageActive: {
+    color: '#ddd5ff',
   },
   categoryChip: {
     paddingHorizontal: 10,

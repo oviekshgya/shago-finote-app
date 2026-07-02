@@ -186,6 +186,7 @@ export type FinancialSummary = {
     income: number;
     expense: number;
     net: number;
+    balance: number;
     count: number;
   }>;
 

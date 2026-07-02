@@ -38,6 +38,10 @@ export default function DashboardScreen(): React.JSX.Element {
   const {summary, loading, refresh} = useFinancialSummary(period, customStartDate, customEndDate);
   const [refreshing, setRefreshing] = useState(false);
   const [rangeModalVisible, setRangeModalVisible] = useState(false);
+  const [comparisonRangeModalVisible, setComparisonRangeModalVisible] = useState(false);
+  const [comparisonCustom, setComparisonCustom] = useState(false);
+  const [comparisonStartDate, setComparisonStartDate] = useState(startOfDay(Date.now() - dayMs));
+  const [comparisonEndDate, setComparisonEndDate] = useState(endOfDay(Date.now() - dayMs));
   const [aiModalVisible, setAiModalVisible] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -101,7 +105,9 @@ export default function DashboardScreen(): React.JSX.Element {
       setComparisonSummary(null);
       return;
     }
-    const range = buildComparisonRange(summary);
+    const range = comparisonCustom
+      ? {startDate: comparisonStartDate, endDate: comparisonEndDate}
+      : buildComparisonRange(summary);
     if (!range) {
       setComparisonSummary(null);
       return;
@@ -109,7 +115,7 @@ export default function DashboardScreen(): React.JSX.Element {
     FinancialStorage.calculateFinancialSummaryByRange(range.startDate, range.endDate, 'customRange')
       .then(setComparisonSummary)
       .catch(() => setComparisonSummary(null));
-  }, [summary]);
+  }, [comparisonCustom, comparisonEndDate, comparisonStartDate, summary]);
 
   const handleAnalyzeAi = async () => {
     setAiModalVisible(true);
@@ -184,7 +190,13 @@ export default function DashboardScreen(): React.JSX.Element {
             <BalanceCard summary={summary} />
 
             <SectionHeader title="Insights" action={formatPeriodAction(period)} />
-            <ComparisonCard current={summary} previous={comparisonSummary} />
+            <ComparisonCard
+              current={summary}
+              previous={comparisonSummary}
+              custom={comparisonCustom}
+              onOpenRange={() => setComparisonRangeModalVisible(true)}
+              onReset={() => setComparisonCustom(false)}
+            />
             <View style={styles.insightGrid}>
               <InsightCard
                 title="Income"
@@ -250,20 +262,36 @@ export default function DashboardScreen(): React.JSX.Element {
             result={aiResult}
             onClose={() => setAiModalVisible(false)}
           />
-          <DateRangeModal
-            visible={rangeModalVisible}
-            startDate={customStartDate}
-            endDate={customEndDate}
-            onClose={() => setRangeModalVisible(false)}
-            onApply={(startDate, endDate) => {
-              setCustomStartDate(startDate);
-              setCustomEndDate(endDate);
-              setPeriod('customRange');
-              setRangeModalVisible(false);
-            }}
-          />
         </>
       ) : null}
+      <DateRangeModal
+        visible={rangeModalVisible}
+        title="Pilih periode"
+        eyebrow="Custom range"
+        startDate={customStartDate}
+        endDate={customEndDate}
+        onClose={() => setRangeModalVisible(false)}
+        onApply={(startDate, endDate) => {
+          setCustomStartDate(startDate);
+          setCustomEndDate(endDate);
+          setPeriod('customRange');
+          setRangeModalVisible(false);
+        }}
+      />
+      <DateRangeModal
+        visible={comparisonRangeModalVisible}
+        title="Bandingkan dengan"
+        eyebrow="Comparison range"
+        startDate={comparisonStartDate}
+        endDate={comparisonEndDate}
+        onClose={() => setComparisonRangeModalVisible(false)}
+        onApply={(startDate, endDate) => {
+          setComparisonStartDate(startDate);
+          setComparisonEndDate(endDate);
+          setComparisonCustom(true);
+          setComparisonRangeModalVisible(false);
+        }}
+      />
     </View>
   );
 }
@@ -290,6 +318,17 @@ function PeriodSelector({
 
   return (
     <View style={styles.periodBlock}>
+      <View style={styles.periodHeader}>
+        <View>
+          <Text style={styles.periodTitle}>Periode</Text>
+          <Text style={styles.periodSubtitle}>
+            {value === 'customRange' ? rangeLabel : formatPeriodAction(value)}
+          </Text>
+        </View>
+        <Pressable style={styles.periodRangeButton} onPress={onOpenRange}>
+          <Text style={styles.periodRangeText}>Pilih Range</Text>
+        </Pressable>
+      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -308,21 +347,7 @@ function PeriodSelector({
             </Text>
           </Pressable>
         ))}
-        <Pressable
-          style={[styles.segmentButton, styles.rangeButton, value === 'customRange' && styles.segmentButtonActive]}
-          onPress={onOpenRange}>
-          <Text
-            style={[
-              styles.segmentText,
-              value === 'customRange' && styles.segmentTextActive,
-            ]}>
-            Range
-          </Text>
-        </Pressable>
       </ScrollView>
-      {value === 'customRange' ? (
-        <Text style={styles.rangeLabel}>{rangeLabel}</Text>
-      ) : null}
     </View>
   );
 }
@@ -399,9 +424,15 @@ function InsightCard({
 function ComparisonCard({
   current,
   previous,
+  custom,
+  onOpenRange,
+  onReset,
 }: {
   current: FinancialSummary;
   previous: FinancialSummary | null;
+  custom: boolean;
+  onOpenRange(): void;
+  onReset(): void;
 }) {
   if (!previous || current.period === 'all') {
     return null;
@@ -419,6 +450,16 @@ function ComparisonCard({
           <Text style={styles.cardSubtitle}>
             {formatRangeShort(current.startDate, current.endDate)} vs {formatRangeShort(previous.startDate, previous.endDate)}
           </Text>
+        </View>
+        <View style={styles.compareActions}>
+          {custom ? (
+            <Pressable style={styles.compareResetButton} onPress={onReset}>
+              <Text style={styles.compareResetText}>Auto</Text>
+            </Pressable>
+          ) : null}
+          <Pressable style={styles.compareRangeButton} onPress={onOpenRange}>
+            <Text style={styles.compareRangeText}>Bandingkan</Text>
+          </Pressable>
         </View>
       </View>
       <View style={styles.compareGrid}>
@@ -568,9 +609,10 @@ function SourceRow({
       </View>
       <View style={styles.sourceCopy}>
         <Text style={styles.sourceName} numberOfLines={1}>{source.sourceName}</Text>
-        <Text style={styles.sourceMeta}>{source.count} transaksi • Net {formatCurrency(source.net)}</Text>
+        <Text style={styles.sourceMeta}>{source.count} transaksi periode ini</Text>
       </View>
       <View style={styles.sourceAmounts}>
+        <Text style={styles.sourceBalance}>Saldo {formatCurrency(source.balance)}</Text>
         <Text style={styles.sourceIncome}>+{formatCurrency(source.income)}</Text>
         <Text style={styles.sourceExpense}>-{formatCurrency(source.expense)}</Text>
       </View>
@@ -876,12 +918,16 @@ function buildMockAiAnalysis(summary: FinancialSummary, budgetUsed: number) {
 
 function DateRangeModal({
   visible,
+  title,
+  eyebrow,
   startDate,
   endDate,
   onClose,
   onApply,
 }: {
   visible: boolean;
+  title: string;
+  eyebrow: string;
   startDate: number;
   endDate: number;
   onClose(): void;
@@ -927,8 +973,8 @@ function DateRangeModal({
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <Pressable style={styles.rangeSheet} onPress={event => event.stopPropagation()}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalEyebrow}>Custom range</Text>
-          <Text style={styles.aiTitle}>Pilih periode</Text>
+          <Text style={styles.modalEyebrow}>{eyebrow}</Text>
+          <Text style={styles.aiTitle}>{title}</Text>
           <View style={styles.rangeTabs}>
             <Pressable
               style={[styles.rangeTab, mode === 'start' && styles.rangeTabActive]}
@@ -1164,6 +1210,39 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingVertical: 6,
   },
+  periodHeader: {
+    minHeight: 50,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  periodTitle: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  periodSubtitle: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  periodRangeButton: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodRangeText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '900',
+  },
   periodScroll: {
     paddingHorizontal: 6,
     gap: 7,
@@ -1187,13 +1266,6 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: colors.surface,
-  },
-  rangeLabel: {
-    marginTop: 6,
-    paddingHorizontal: 12,
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '900',
   },
   loadingContainer: {
     minHeight: 360,
@@ -1340,6 +1412,39 @@ const styles = StyleSheet.create({
   compareGrid: {
     flexDirection: 'row',
     gap: 10,
+  },
+  compareActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  compareRangeButton: {
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compareRangeText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  compareResetButton: {
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compareResetText: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
   },
   compareMetric: {
     flex: 1,
@@ -1489,7 +1594,13 @@ const styles = StyleSheet.create({
   },
   sourceAmounts: {
     alignItems: 'flex-end',
-    minWidth: 96,
+    minWidth: 112,
+  },
+  sourceBalance: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 3,
   },
   sourceIncome: {
     color: colors.teal,
