@@ -6,6 +6,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
+  DeviceEventEmitter,
   Modal,
   Pressable,
   ScrollView,
@@ -75,6 +76,7 @@ export default function BillsScreen(): React.JSX.Element {
       setTargetDate(startOfTodayAtNine());
       setPickerMonth(startOfMonth(startOfTodayAtNine()));
       await loadGoals();
+      DeviceEventEmitter.emit('goalsUpdated');
       Alert.alert('Goal tersimpan', 'Target tabungan berhasil ditambahkan.');
     } catch (error) {
       Alert.alert('Gagal menyimpan goal', String(error));
@@ -92,6 +94,7 @@ export default function BillsScreen(): React.JSX.Element {
         onPress: async () => {
           await FinancialStorage.deleteGoal(goal.id);
           await loadGoals();
+          DeviceEventEmitter.emit('goalsUpdated');
         },
       },
     ]);
@@ -274,8 +277,8 @@ function DatePickerModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.dateModalSheet}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.dateModalSheet} onPress={event => event.stopPropagation()}>
           <View style={styles.dateModalHeader}>
             <Pressable style={styles.monthButton} onPress={() => onChangeMonth(addMonths(month, -1))}>
               <Text style={styles.monthButtonText}>{'<'}</Text>
@@ -311,8 +314,8 @@ function DatePickerModal({
           <Pressable style={styles.modalCloseButton} onPress={onClose}>
             <Text style={styles.modalCloseText}>Tutup</Text>
           </Pressable>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

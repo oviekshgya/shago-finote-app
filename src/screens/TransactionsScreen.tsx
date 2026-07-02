@@ -165,7 +165,7 @@ export default function TransactionsScreen(): React.JSX.Element {
         format: exportFormat,
         emailTo,
       });
-      setExportProgress('Mengirim report ke backend...');
+      setExportProgress('Mengirim report untuk diproses...');
       const result = await exportTransactions(payload);
       setExportFormVisible(false);
       setExportProgress('Report berhasil dikirim ke email.');
@@ -328,13 +328,13 @@ function ExportFormModal({
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalSheet}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={event => event.stopPropagation()}>
           <View style={styles.modalHandle} />
           <Text style={styles.modalEyebrow}>Export report</Text>
           <Text style={styles.modalTitle}>Kirim laporan ke email</Text>
           <Text style={styles.exportFormHint}>
-            File laporan akan dibuat oleh backend dan dikirim ke alamat email tujuan.
+            File laporan akan dibuat dan dikirim ke alamat email tujuan.
           </Text>
 
           <Text style={styles.exportFormLabel}>Format file</Text>
@@ -374,8 +374,8 @@ function ExportFormModal({
               <Text style={styles.exportSubmitText}>Kirim</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -523,8 +523,8 @@ function TransactionEditModal({
 }) {
   return (
     <Modal visible={Boolean(transaction)} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalSheet}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={event => event.stopPropagation()}>
           <View style={styles.modalHandle} />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.modalEyebrow}>Edit transaction</Text>
@@ -603,8 +603,8 @@ function TransactionEditModal({
               <Text style={styles.editSaveText}>Simpan</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -621,8 +621,8 @@ function TransactionDetailModal({
 
   return (
     <Modal visible={Boolean(transaction)} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalSheet}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={event => event.stopPropagation()}>
           <View style={styles.modalHandle} />
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.modalEyebrow}>Transaction detail</Text>
@@ -648,8 +648,8 @@ function TransactionDetailModal({
           <Pressable style={styles.modalCloseButton} onPress={onClose}>
             <Text style={styles.modalCloseText}>Tutup</Text>
           </Pressable>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

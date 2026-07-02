@@ -3,11 +3,12 @@ import type {
   FinancialSummary,
   FinancialTransaction,
   SavingsGoal,
+  SummaryPeriodType,
   TransactionCategory,
   TransactionType,
 } from '../types/FinancialTransaction';
 
-export type ReportPeriodType = 'today' | 'week' | 'month' | 'all';
+export type ReportPeriodType = SummaryPeriodType;
 export type ExportFormat = 'excel' | 'pdf';
 
 type Period = {
@@ -284,19 +285,42 @@ function buildPeriod(periodType: ReportPeriodType, transactions: FinancialTransa
 
 function fallbackPeriodRange(periodType: ReportPeriodType): {startDate: number; endDate: number} {
   const now = Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
   if (periodType === 'today') {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return {startDate: today.getTime(), endDate: now};
   }
   if (periodType === 'week') {
-    return {startDate: now - 7 * dayMs, endDate: now};
+    return {startDate: startOfWeek(now), endDate: now};
   }
   if (periodType === 'month') {
-    return {startDate: now - 30 * dayMs, endDate: now};
+    return {startDate: startOfMonth(now), endDate: now};
+  }
+  if (periodType === 'lastWeek') {
+    const endDate = startOfWeek(now) - 1;
+    return {startDate: startOfWeek(endDate), endDate};
+  }
+  if (periodType === 'lastMonth') {
+    const endDate = startOfMonth(now) - 1;
+    return {startDate: startOfMonth(endDate), endDate};
   }
   return {startDate: 0, endDate: now};
+}
+
+function startOfWeek(timestamp: number): number {
+  const date = new Date(timestamp);
+  const day = date.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + mondayOffset);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function startOfMonth(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
 }
 
 function summarizeTransactions(transactions: FinancialTransaction[]): ReportPayload['summary'] {
@@ -359,7 +383,13 @@ function formatPeriodLabel(period: Period): string {
     return 'Hari Ini';
   }
   if (period.type === 'week') {
-    return '7 Hari Terakhir';
+    return 'Minggu Ini';
+  }
+  if (period.type === 'lastWeek') {
+    return 'Minggu Lalu';
+  }
+  if (period.type === 'lastMonth') {
+    return 'Bulan Lalu';
   }
   if (period.type === 'all') {
     return 'Semua Periode';

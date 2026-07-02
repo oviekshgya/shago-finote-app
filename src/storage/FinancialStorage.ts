@@ -12,6 +12,7 @@ import type {
   NotificationRawLog,
   FinancialSummary,
   SavingsGoal,
+  SummaryPeriodType,
   TransactionCategory,
 } from '../types/FinancialTransaction';
 import type {CaptureRule} from '../types/CaptureRule';
@@ -355,11 +356,10 @@ export class FinancialStorage {
    */
 
   static async calculateFinancialSummary(
-    period: 'today' | 'week' | 'month' | 'all',
+    period: SummaryPeriodType,
   ): Promise<FinancialSummary> {
     const transactions = await this.getAllTransactions();
     const now = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
 
     let startDate: number;
     let endDate: number;
@@ -373,15 +373,23 @@ export class FinancialStorage {
         break;
 
       case 'week':
-        const weekAgo = now - 7 * dayMs;
-        startDate = weekAgo;
+        startDate = startOfWeek(now);
         endDate = now;
         break;
 
       case 'month':
-        const monthAgo = now - 30 * dayMs;
-        startDate = monthAgo;
+        startDate = startOfMonth(now);
         endDate = now;
+        break;
+
+      case 'lastWeek':
+        endDate = startOfWeek(now) - 1;
+        startDate = startOfWeek(endDate);
+        break;
+
+      case 'lastMonth':
+        endDate = startOfMonth(now) - 1;
+        startDate = startOfMonth(endDate);
         break;
 
       case 'all':
@@ -517,4 +525,20 @@ export class FinancialStorage {
       AsyncStorage.removeItem(STORAGE_KEYS.CAPTURE_RULES),
     ]);
   }
+}
+
+function startOfWeek(timestamp: number): number {
+  const date = new Date(timestamp);
+  const day = date.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + mondayOffset);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function startOfMonth(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
 }

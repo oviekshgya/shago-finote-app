@@ -22,6 +22,7 @@ export type TransactionCategory =
 
 export type TransactionSource = 'auto' | 'manual';
 export type SyncStatus = 'pending' | 'synced' | 'failed';
+export type SummaryPeriodType = 'today' | 'week' | 'month' | 'all' | 'lastWeek' | 'lastMonth';
 
 /**
  * Struktur utama transaksi keuangan
@@ -146,7 +147,7 @@ export type BudgetLimit = {
  */
 export type FinancialSummary = {
   // Period
-  period: 'today' | 'week' | 'month' | 'all';
+  period: SummaryPeriodType;
   startDate: number;
   endDate: number;
 

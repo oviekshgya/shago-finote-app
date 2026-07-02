@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   ActivityIndicator,
+  DeviceEventEmitter,
   Modal,
   Pressable,
   RefreshControl,
@@ -10,9 +11,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import type {FinancialSummary, SavingsGoal, TransactionCategory} from '../types/FinancialTransaction';
+import type {FinancialSummary, SavingsGoal, SummaryPeriodType, TransactionCategory} from '../types/FinancialTransaction';
 import {useFinancialSummary} from '../hooks/useTransactions';
 import {formatCurrency} from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
@@ -25,7 +26,7 @@ const monthlyBudget = 5000000;
 export default function DashboardScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
+  const [period, setPeriod] = useState<SummaryPeriodType>('month');
   const {summary, loading, refresh} = useFinancialSummary(period);
   const [refreshing, setRefreshing] = useState(false);
   const [aiModalVisible, setAiModalVisible] = useState(false);
@@ -52,6 +53,17 @@ export default function DashboardScreen(): React.JSX.Element {
   useEffect(() => {
     loadGoalState().catch(() => undefined);
   }, [loadGoalState, summary]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadGoalState().catch(() => undefined);
+    }, [loadGoalState]),
+  );
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('goalsUpdated', loadGoalState);
+    return () => subscription.remove();
+  }, [loadGoalState]);
 
   const handleAnalyzeAi = async () => {
     setAiModalVisible(true);
@@ -112,9 +124,9 @@ export default function DashboardScreen(): React.JSX.Element {
           </View>
         ) : summary ? (
           <>
-            <BalanceCard summary={summary} budgetUsed={budgetUsed} />
+            <BalanceCard summary={summary} />
 
-            <SectionHeader title="Insights" action="This month" />
+            <SectionHeader title="Insights" action={formatPeriodAction(period)} />
             <View style={styles.insightGrid}>
               <InsightCard
                 title="Income"
@@ -160,7 +172,7 @@ export default function DashboardScreen(): React.JSX.Element {
       {summary ? (
         <>
           <Pressable
-            style={[styles.aiFab, {bottom: Math.max(insets.bottom, 12) + 78}]}
+            style={[styles.aiFab, {bottom: Math.max(insets.bottom, 10) + 64}]}
             onPress={handleAnalyzeAi}>
             <Text style={styles.aiFabIcon}>AI</Text>
             <Text style={styles.aiFabText}>Analyze AI</Text>
@@ -185,14 +197,16 @@ function PeriodSelector({
   value,
   onChange,
 }: {
-  value: 'today' | 'week' | 'month' | 'all';
-  onChange(value: 'today' | 'week' | 'month' | 'all'): void;
+  value: SummaryPeriodType;
+  onChange(value: SummaryPeriodType): void;
 }) {
   const items: Array<{value: typeof value; label: string}> = [
     {value: 'today', label: 'Today'},
     {value: 'week', label: 'Week'},
     {value: 'month', label: 'Month'},
     {value: 'all', label: 'All'},
+    {value: 'lastWeek', label: 'Last Week'},
+    {value: 'lastMonth', label: 'Last Month'},
   ];
 
   return (
@@ -217,18 +231,10 @@ function PeriodSelector({
 
 function BalanceCard({
   summary,
-  budgetUsed,
 }: {
   summary: FinancialSummary;
-  budgetUsed: number;
 }) {
   const balance = summary.netCashFlow;
-  const paydayDate = new Date();
-  paydayDate.setMonth(paydayDate.getMonth() + 1, 25);
-  const daysToPayday = Math.max(
-    0,
-    Math.ceil((paydayDate.getTime() - Date.now()) / 86400000),
-  );
 
   return (
     <View style={styles.balanceCard}>
@@ -245,17 +251,6 @@ function BalanceCard({
       <View style={styles.balanceStats}>
         <MiniStat label="Spending" value={formatCurrency(summary.totalExpense)} tone="pink" />
         <MiniStat label="Saving" value={formatCurrency(balance)} tone="teal" />
-      </View>
-
-      <View style={styles.paydayRow}>
-        <View style={styles.paydayIcon}>
-          <Text style={styles.paydayIconText}>P</Text>
-        </View>
-        <View style={styles.paydayTextWrap}>
-          <Text style={styles.paydayTitle}>Payday countdown</Text>
-          <Text style={styles.paydayText}>{daysToPayday} days left to next payday</Text>
-        </View>
-        <Text style={styles.paydayPercent}>{Math.round(budgetUsed * 100)}%</Text>
       </View>
     </View>
   );
@@ -490,14 +485,14 @@ function AiAnalysisModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.aiSheet}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.aiSheet} onPress={event => event.stopPropagation()}>
           <View style={styles.modalHandle} />
           {loading ? (
             <View style={styles.aiLoadingState}>
               <ActivityIndicator color={colors.primary} size="large" />
               <Text style={styles.aiTitle}>Menganalisis keuangan...</Text>
-              <Text style={styles.aiSummary}>Backend sedang membaca transaksi, goals, dan bills periode ini.</Text>
+              <Text style={styles.aiSummary}>Sedang membaca transaksi dan goals periode ini.</Text>
               <View style={styles.aiLoadingBar}>
                 <View style={styles.aiLoadingFill} />
               </View>
@@ -549,8 +544,8 @@ function AiAnalysisModal({
           <Pressable style={styles.modalCloseButton} onPress={onClose}>
             <Text style={styles.modalCloseText}>Tutup</Text>
           </Pressable>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -618,9 +613,21 @@ function buildMockAiAnalysis(summary: FinancialSummary, budgetUsed: number) {
       topExpense
         ? `Review kategori ${topExpenseLabel} karena menjadi pengeluaran terbesar.`
         : 'Tambahkan lebih banyak data transaksi agar analisis kategori lebih akurat.',
-      'Integrasi backend nanti bisa mengganti mock ini dengan rekomendasi AI berbasis histori lengkap.',
+      'Analisis AI bisa memberi rekomendasi yang lebih akurat saat histori transaksi makin lengkap.',
     ],
   };
+}
+
+function formatPeriodAction(period: SummaryPeriodType): string {
+  const labels: Record<SummaryPeriodType, string> = {
+    today: 'Today',
+    week: 'This week',
+    month: 'This month',
+    all: 'All time',
+    lastWeek: 'Last week',
+    lastMonth: 'Last month',
+  };
+  return labels[period];
 }
 
 function formatCategoryLabel(category: TransactionCategory): string {
@@ -649,7 +656,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 18,
-    paddingBottom: 28,
+    paddingBottom: 112,
   },
   header: {
     flexDirection: 'row',
@@ -685,6 +692,8 @@ const styles = StyleSheet.create({
   },
   segment: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
     padding: 4,
     borderRadius: radii.lg,
     backgroundColor: colors.surface,
@@ -693,7 +702,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   segmentButton: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: '30%',
     minHeight: 36,
     borderRadius: radii.md,
     alignItems: 'center',
@@ -776,45 +786,6 @@ const styles = StyleSheet.create({
   miniStatValue: {
     color: colors.ink,
     fontSize: 14,
-    fontWeight: '900',
-  },
-  paydayRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: radii.lg,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    gap: 10,
-  },
-  paydayIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.yellow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paydayIconText: {
-    color: colors.ink,
-    fontWeight: '900',
-  },
-  paydayTextWrap: {
-    flex: 1,
-  },
-  paydayTitle: {
-    color: colors.surface,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  paydayText: {
-    color: '#e7e1ff',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  paydayPercent: {
-    color: colors.surface,
-    fontSize: 13,
     fontWeight: '900',
   },
   sectionHeader: {
@@ -1109,11 +1080,11 @@ const styles = StyleSheet.create({
   },
   aiFab: {
     position: 'absolute',
-    right: 18,
-    minHeight: 52,
-    borderRadius: 26,
-    paddingLeft: 12,
-    paddingRight: 16,
+    right: 14,
+    minHeight: 42,
+    borderRadius: 21,
+    paddingLeft: 9,
+    paddingRight: 12,
     backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1121,19 +1092,19 @@ const styles = StyleSheet.create({
     ...shadow,
   },
   aiFabIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: colors.surface,
     color: colors.primary,
     textAlign: 'center',
-    lineHeight: 30,
-    fontSize: 12,
+    lineHeight: 24,
+    fontSize: 10,
     fontWeight: '900',
   },
   aiFabText: {
     color: colors.surface,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '900',
   },
   modalBackdrop: {

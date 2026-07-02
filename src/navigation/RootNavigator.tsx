@@ -223,7 +223,8 @@ export default function RootNavigator() {
           component={AddStack}
           options={{
             title: 'Tambah',
-            tabBarLabel: 'Tambah',
+            tabBarLabel: '',
+            tabBarShowLabel: false,
             tabBarIcon: ({focused}) => (
               <View
                 style={[

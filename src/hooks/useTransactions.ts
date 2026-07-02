@@ -4,7 +4,7 @@
 
 import {DeviceEventEmitter} from 'react-native';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import type { FinancialTransaction, FinancialSummary } from '../types/FinancialTransaction';
+import type { FinancialTransaction, FinancialSummary, SummaryPeriodType } from '../types/FinancialTransaction';
 import { FinancialStorage } from '../storage/FinancialStorage';
 import NotificationModule from '../native/NotificationModule';
 import {TransactionCaptureService} from '../services/TransactionCaptureService';
@@ -20,7 +20,7 @@ export interface UseTransactionsResult {
   getTransaction: (id: string) => FinancialTransaction | undefined;
   searchTransactions: (query: string) => Promise<FinancialTransaction[]>;
   getTransactionsByDateRange: (startDate: number, endDate: number) => Promise<FinancialTransaction[]>;
-  getFinancialSummary: (period: 'today' | 'week' | 'month' | 'all') => Promise<FinancialSummary>;
+  getFinancialSummary: (period: SummaryPeriodType) => Promise<FinancialSummary>;
 }
 
 /**
@@ -112,7 +112,7 @@ export function useTransactions(): UseTransactionsResult {
   }, []);
 
   const getFinancialSummary = useCallback(
-    async (period: 'today' | 'week' | 'month' | 'all') => {
+    async (period: SummaryPeriodType) => {
       return FinancialStorage.calculateFinancialSummary(period);
     },
     [],
@@ -136,7 +136,7 @@ export function useTransactions(): UseTransactionsResult {
 /**
  * Hook untuk fetch financial summary
  */
-export function useFinancialSummary(period: 'today' | 'week' | 'month' | 'all' = 'month') {
+export function useFinancialSummary(period: SummaryPeriodType = 'month') {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
