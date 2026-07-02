@@ -43,6 +43,13 @@ export class TransactionCaptureService {
   }> {
     try {
       this.initialize();
+      const deletedRawIds = await FinancialStorage.getDeletedRawNotificationIds();
+      if (deletedRawIds.includes(notification.id)) {
+        return {
+          success: false,
+          error: 'Notification transaction was deleted by user',
+        };
+      }
 
       // Parse notifikasi. User-defined source rules take priority over default parser rules.
       const parseResult =
@@ -218,11 +225,12 @@ export class TransactionCaptureService {
       }
 
       const transactions = await FinancialStorage.getAllTransactions();
+      const deletedRawIds = new Set(await FinancialStorage.getDeletedRawNotificationIds());
       const completedNotificationIds = new Set(
         transactions.map(transaction => transaction.rawNotificationId).filter(Boolean),
       );
       const pendingNotifications = notifications.filter(
-        notification => !completedNotificationIds.has(notification.id),
+        notification => !completedNotificationIds.has(notification.id) && !deletedRawIds.has(notification.id),
       );
 
       if (pendingNotifications.length === 0) {
@@ -464,7 +472,8 @@ export class TransactionCaptureService {
     stillFailed: number;
   }> {
     const rawLogs = await FinancialStorage.getAllRawNotifications();
-    const failedLogs = rawLogs.filter(log => !log.parserResult);
+    const deletedRawIds = new Set(await FinancialStorage.getDeletedRawNotificationIds());
+    const failedLogs = rawLogs.filter(log => !log.parserResult && !deletedRawIds.has(log.id));
 
     let reParsed = 0;
     let stillFailed = 0;

@@ -86,6 +86,8 @@ export type AiAnalysisPayload = Omit<ReportPayload, 'report' | 'options' | 'emai
     name: string;
     targetAmount: number;
     currentAmount: number;
+    startDate: number;
+    endDate: number;
     dueDate: number;
   }>;
   bills: Array<{
@@ -164,20 +166,27 @@ export function buildReportPayloadFromTransactions({
 export async function buildAiAnalysisPayload({
   periodType,
   prompt,
+  startDate,
+  endDate,
 }: {
   periodType: ReportPeriodType;
   prompt: string;
+  startDate?: number;
+  endDate?: number;
 }): Promise<AiAnalysisPayload> {
-  const summary = await FinancialStorage.calculateFinancialSummary(periodType);
+  const summary = periodType === 'customRange' && startDate && endDate
+    ? await FinancialStorage.calculateFinancialSummaryByRange(startDate, endDate, periodType)
+    : await FinancialStorage.calculateFinancialSummary(periodType);
   const transactions = await FinancialStorage.getTransactionsByDateRange(
     summary.startDate,
     summary.endDate,
   );
-  const [goals, allSummary] = await Promise.all([
-    FinancialStorage.getAllGoals(),
-    FinancialStorage.calculateFinancialSummary('all'),
-  ]);
-  const savingBalance = Math.max(allSummary.netCashFlow, 0);
+  const goals = await FinancialStorage.getAllGoals();
+  const goalPayload = await Promise.all(
+    goals
+      .filter(goal => !goal.isArchived)
+      .map(goal => mapSavingsGoalToAi(goal)),
+  );
   const now = Date.now();
   const basePayload = buildReportPayloadFromSummaryAndTransactions({
     summary,
@@ -204,7 +213,7 @@ export async function buildAiAnalysisPayload({
     summary: basePayload.summary,
     transactions: basePayload.transactions,
     categorySummary: basePayload.categorySummary,
-    goals: goals.filter(goal => !goal.isArchived).map(goal => mapSavingsGoalToAi(goal, savingBalance)),
+    goals: goalPayload,
     bills: [],
     temperature: 0.2,
     options: {
@@ -304,6 +313,9 @@ function fallbackPeriodRange(periodType: ReportPeriodType): {startDate: number; 
     const endDate = startOfMonth(now) - 1;
     return {startDate: startOfMonth(endDate), endDate};
   }
+  if (periodType === 'customRange') {
+    return {startDate: startOfMonth(now), endDate: now};
+  }
   return {startDate: 0, endDate: now};
 }
 
@@ -313,6 +325,18 @@ function startOfWeek(timestamp: number): number {
   const mondayOffset = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + mondayOffset);
   date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function startOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function endOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(23, 59, 59, 999);
   return date.getTime();
 }
 
@@ -369,13 +393,31 @@ function buildCategorySummary(transactions: FinancialTransaction[]): CategorySum
   return [...grouped.values()].sort((a, b) => b.amount - a.amount);
 }
 
-function mapSavingsGoalToAi(item: SavingsGoal, savingBalance: number) {
+async function mapSavingsGoalToAi(item: SavingsGoal) {
+  const startDate = getGoalStartDate(item);
+  const endDate = getGoalEndDate(item);
+  const summary = await FinancialStorage.calculateFinancialSummaryByRange(
+    startDate,
+    endDate,
+    'customRange',
+  );
+  const savingBalance = Math.max(summary.netCashFlow, 0);
   return {
     name: item.name,
     targetAmount: item.targetAmount,
     currentAmount: Math.min(savingBalance, item.targetAmount),
-    dueDate: item.targetDate,
+    startDate,
+    endDate,
+    dueDate: endDate,
   };
+}
+
+function getGoalStartDate(goal: SavingsGoal): number {
+  return startOfDay(goal.startDate ?? goal.targetDate ?? Date.now());
+}
+
+function getGoalEndDate(goal: SavingsGoal): number {
+  return endOfDay(goal.endDate ?? goal.targetDate ?? Date.now());
 }
 
 function formatPeriodLabel(period: Period): string {
@@ -390,6 +432,9 @@ function formatPeriodLabel(period: Period): string {
   }
   if (period.type === 'lastMonth') {
     return 'Bulan Lalu';
+  }
+  if (period.type === 'customRange') {
+    return 'Custom Range';
   }
   if (period.type === 'all') {
     return 'Semua Periode';

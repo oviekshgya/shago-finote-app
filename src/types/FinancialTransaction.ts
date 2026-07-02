@@ -22,7 +22,14 @@ export type TransactionCategory =
 
 export type TransactionSource = 'auto' | 'manual';
 export type SyncStatus = 'pending' | 'synced' | 'failed';
-export type SummaryPeriodType = 'today' | 'week' | 'month' | 'all' | 'lastWeek' | 'lastMonth';
+export type SummaryPeriodType =
+  | 'today'
+  | 'week'
+  | 'month'
+  | 'all'
+  | 'lastWeek'
+  | 'lastMonth'
+  | 'customRange';
 
 /**
  * Struktur utama transaksi keuangan
@@ -116,7 +123,9 @@ export type SavingsGoal = {
   name: string;
   targetAmount: number;
   currency: string;
-  targetDate: number;
+  startDate: number;
+  endDate: number;
+  targetDate?: number;
   createdAt: number;
   updatedAt: number;
   isArchived?: boolean;
@@ -168,6 +177,17 @@ export type FinancialSummary = {
   // Top Categories
   topExpenseCategories: Array<{category: TransactionCategory; amount: number}>;
   topIncomeCategories: Array<{category: TransactionCategory; amount: number}>;
+
+  // By Source App
+  sourceSummary: Array<{
+    sourceName: string;
+    sourcePackageName?: string;
+    sourceType: TransactionSource;
+    income: number;
+    expense: number;
+    net: number;
+    count: number;
+  }>;
 
   // Cashflow
   dailyCashflow: Array<{date: string; income: number; expense: number; net: number}>;

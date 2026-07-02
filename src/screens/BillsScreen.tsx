@@ -22,15 +22,25 @@ import type {SavingsGoal} from '../types/FinancialTransaction';
 import {formatCurrency, formatTransactionDate} from '../utils/TransactionUtils';
 import {colors, radii, shadow} from '../theme/finoteTheme';
 
+type GoalProgress = {
+  current: number;
+  progress: number;
+  achieved: boolean;
+  remaining: number;
+};
+
 export default function BillsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [savingBalance, setSavingBalance] = useState(0);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [targetDate, setTargetDate] = useState(startOfTodayAtNine());
+  const [startDate, setStartDate] = useState(startOfDay(Date.now()));
+  const [endDate, setEndDate] = useState(endOfDay(Date.now()));
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [pickerMonth, setPickerMonth] = useState(startOfMonth(startOfTodayAtNine()));
+  const [pickerMonth, setPickerMonth] = useState(startOfMonth(Date.now()));
+  const [pickerMode, setPickerMode] = useState<'start' | 'end'>('start');
+  const [goalProgressMap, setGoalProgressMap] = useState<Record<string, GoalProgress>>({});
   const [saving, setSaving] = useState(false);
 
   const loadGoals = useCallback(async () => {
@@ -38,7 +48,17 @@ export default function BillsScreen(): React.JSX.Element {
       FinancialStorage.getAllGoals(),
       FinancialStorage.calculateFinancialSummary('all'),
     ]);
-    setGoals(data.filter(goal => !goal.isArchived).sort((a, b) => a.targetDate - b.targetDate));
+    const activeGoals = data
+      .filter(goal => !goal.isArchived)
+      .sort((a, b) => getGoalStartDate(a) - getGoalStartDate(b));
+    const progressEntries = await Promise.all(
+      activeGoals.map(async goal => {
+        const progress = await calculateGoalProgress(goal);
+        return [goal.id, progress] as const;
+      }),
+    );
+    setGoals(activeGoals);
+    setGoalProgressMap(Object.fromEntries(progressEntries));
     setSavingBalance(Math.max(summary.netCashFlow, 0));
   }, []);
 
@@ -63,7 +83,8 @@ export default function BillsScreen(): React.JSX.Element {
       name: name.trim(),
       targetAmount: numericAmount,
       currency: 'IDR',
-      targetDate,
+      startDate: startOfDay(startDate),
+      endDate: endOfDay(endDate),
       createdAt: now,
       updatedAt: now,
     };
@@ -73,8 +94,9 @@ export default function BillsScreen(): React.JSX.Element {
       await FinancialStorage.addGoal(goal);
       setName('');
       setAmount('');
-      setTargetDate(startOfTodayAtNine());
-      setPickerMonth(startOfMonth(startOfTodayAtNine()));
+      setStartDate(startOfDay(Date.now()));
+      setEndDate(endOfDay(Date.now()));
+      setPickerMonth(startOfMonth(Date.now()));
       await loadGoals();
       DeviceEventEmitter.emit('goalsUpdated');
       Alert.alert('Goal tersimpan', 'Target tabungan berhasil ditambahkan.');
@@ -133,9 +155,9 @@ export default function BillsScreen(): React.JSX.Element {
             placeholder="Target nominal, misal Rp 1.000.000"
             placeholderTextColor={colors.faint}
           />
-          <Text style={styles.inputLabel}>Target tanggal</Text>
+          <Text style={styles.inputLabel}>Target range tanggal</Text>
           <Pressable style={styles.datePickerButton} onPress={() => setPickerVisible(true)}>
-            <Text style={styles.datePickerText}>{formatReadableDate(targetDate)}</Text>
+            <Text style={styles.datePickerText}>{formatRangeReadable(startDate, endDate)}</Text>
             <Text style={styles.datePickerAction}>Pilih</Text>
           </Pressable>
           <Pressable style={styles.saveButton} onPress={saveGoal} disabled={saving}>
@@ -154,7 +176,7 @@ export default function BillsScreen(): React.JSX.Element {
             <GoalItem
               key={goal.id}
               goal={goal}
-              savingBalance={savingBalance}
+              progress={goalProgressMap[goal.id]}
               onDelete={() => deleteGoal(goal)}
             />
           ))
@@ -164,11 +186,23 @@ export default function BillsScreen(): React.JSX.Element {
       <DatePickerModal
         visible={pickerVisible}
         month={pickerMonth}
-        selectedDate={targetDate}
+        startDate={startDate}
+        endDate={endDate}
+        mode={pickerMode}
         onChangeMonth={setPickerMonth}
+        onChangeMode={setPickerMode}
         onSelect={value => {
-          setTargetDate(value);
-          setPickerVisible(false);
+          if (pickerMode === 'start') {
+            const nextStart = startOfDay(value);
+            setStartDate(nextStart);
+            if (nextStart > endDate) {
+              setEndDate(endOfDay(nextStart));
+            }
+            setPickerMode('end');
+            return;
+          }
+          const nextEnd = endOfDay(value);
+          setEndDate(nextEnd < startDate ? endOfDay(startDate) : nextEnd);
         }}
         onClose={() => setPickerVisible(false)}
       />
@@ -178,31 +212,31 @@ export default function BillsScreen(): React.JSX.Element {
 
 function GoalItem({
   goal,
-  savingBalance,
+  progress,
   onDelete,
 }: {
   goal: SavingsGoal;
-  savingBalance: number;
+  progress?: GoalProgress;
   onDelete(): void;
 }) {
-  const current = Math.min(savingBalance, goal.targetAmount);
-  const progress = goal.targetAmount > 0 ? Math.min(current / goal.targetAmount, 1) : 0;
-  const achieved = savingBalance >= goal.targetAmount;
-  const remaining = Math.max(goal.targetAmount - savingBalance, 0);
+  const current = progress?.current ?? 0;
+  const progressValue = progress?.progress ?? 0;
+  const achieved = progress?.achieved ?? false;
+  const remaining = progress?.remaining ?? goal.targetAmount;
 
   return (
     <View style={styles.goalItem}>
       <View style={styles.goalTop}>
         <View style={styles.goalCopy}>
           <Text style={styles.goalTitle}>{goal.name}</Text>
-          <Text style={styles.goalMeta}>Target {formatTransactionDate(goal.targetDate)}</Text>
+          <Text style={styles.goalMeta}>{formatRangeReadable(getGoalStartDate(goal), getGoalEndDate(goal))}</Text>
         </View>
         <Text style={[styles.goalStatus, achieved ? styles.goalStatusDone : styles.goalStatusOpen]}>
           {achieved ? 'Berhasil' : 'On progress'}
         </Text>
       </View>
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, {width: `${Math.max(4, Math.round(progress * 100))}%`}]} />
+        <View style={[styles.progressFill, {width: `${Math.max(4, Math.round(progressValue * 100))}%`}]} />
       </View>
       <View style={styles.goalFooter}>
         <Text style={styles.goalAmount}>{formatCurrency(current)} / {formatCurrency(goal.targetAmount)}</Text>
@@ -215,9 +249,39 @@ function GoalItem({
   );
 }
 
-function startOfTodayAtNine(): number {
-  const date = new Date();
-  date.setHours(9, 0, 0, 0);
+async function calculateGoalProgress(goal: SavingsGoal): Promise<GoalProgress> {
+  const summary = await FinancialStorage.calculateFinancialSummaryByRange(
+    getGoalStartDate(goal),
+    getGoalEndDate(goal),
+    'customRange',
+  );
+  const current = Math.max(summary.netCashFlow, 0);
+  const progress = goal.targetAmount > 0 ? Math.min(current / goal.targetAmount, 1) : 0;
+  return {
+    current: Math.min(current, goal.targetAmount),
+    progress,
+    achieved: current >= goal.targetAmount,
+    remaining: Math.max(goal.targetAmount - current, 0),
+  };
+}
+
+function getGoalStartDate(goal: SavingsGoal): number {
+  return startOfDay(goal.startDate ?? goal.targetDate ?? Date.now());
+}
+
+function getGoalEndDate(goal: SavingsGoal): number {
+  return endOfDay(goal.endDate ?? goal.targetDate ?? Date.now());
+}
+
+function startOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function endOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(23, 59, 59, 999);
   return date.getTime();
 }
 
@@ -244,27 +308,28 @@ function sameDate(left: number, right: number): boolean {
   );
 }
 
-function formatReadableDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+function formatRangeReadable(start: number, end: number): string {
+  return `${formatTransactionDate(start)} - ${formatTransactionDate(end)}`;
 }
 
 function DatePickerModal({
   visible,
   month,
-  selectedDate,
+  startDate,
+  endDate,
+  mode,
   onChangeMonth,
+  onChangeMode,
   onSelect,
   onClose,
 }: {
   visible: boolean;
   month: number;
-  selectedDate: number;
+  startDate: number;
+  endDate: number;
+  mode: 'start' | 'end';
   onChangeMonth(value: number): void;
+  onChangeMode(value: 'start' | 'end'): void;
   onSelect(value: number): void;
   onClose(): void;
 }) {
@@ -279,6 +344,20 @@ function DatePickerModal({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <Pressable style={styles.dateModalSheet} onPress={event => event.stopPropagation()}>
+          <View style={styles.rangeTabs}>
+            <Pressable
+              style={[styles.rangeTab, mode === 'start' && styles.rangeTabActive]}
+              onPress={() => onChangeMode('start')}>
+              <Text style={[styles.rangeTabLabel, mode === 'start' && styles.rangeTabLabelActive]}>Start</Text>
+              <Text style={[styles.rangeTabDate, mode === 'start' && styles.rangeTabDateActive]}>{formatTransactionDate(startDate)}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.rangeTab, mode === 'end' && styles.rangeTabActive]}
+              onPress={() => onChangeMode('end')}>
+              <Text style={[styles.rangeTabLabel, mode === 'end' && styles.rangeTabLabelActive]}>End</Text>
+              <Text style={[styles.rangeTabDate, mode === 'end' && styles.rangeTabDateActive]}>{formatTransactionDate(endDate)}</Text>
+            </Pressable>
+          </View>
           <View style={styles.dateModalHeader}>
             <Pressable style={styles.monthButton} onPress={() => onChangeMonth(addMonths(month, -1))}>
               <Text style={styles.monthButtonText}>{'<'}</Text>
@@ -299,11 +378,12 @@ function DatePickerModal({
             {blanks.map(item => <View key={item} style={styles.dayCell} />)}
             {days.map(day => {
               const value = new Date(monthDate.getFullYear(), monthDate.getMonth(), day, 9, 0, 0, 0).getTime();
-              const selected = sameDate(value, selectedDate);
+              const selected = sameDate(value, startDate) || sameDate(value, endDate);
+              const inRange = value >= startOfDay(startDate) && value <= endOfDay(endDate);
               return (
                 <Pressable
                   key={day}
-                  style={[styles.dayCell, selected && styles.dayCellSelected]}
+                  style={[styles.dayCell, inRange && styles.dayCellInRange, selected && styles.dayCellSelected]}
                   onPress={() => onSelect(value)}>
                   <Text style={[styles.dayText, selected && styles.dayTextSelected]}>{day}</Text>
                 </Pressable>
@@ -558,6 +638,42 @@ const styles = StyleSheet.create({
     padding: 18,
     paddingBottom: 24,
   },
+  rangeTabs: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  rangeTab: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  rangeTabActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  rangeTabLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  rangeTabLabelActive: {
+    color: '#ddd5ff',
+  },
+  rangeTabDate: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  rangeTabDateActive: {
+    color: colors.surface,
+  },
   dateModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -604,6 +720,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.md,
+  },
+  dayCellInRange: {
+    backgroundColor: colors.primarySoft,
   },
   dayCellSelected: {
     backgroundColor: colors.primary,

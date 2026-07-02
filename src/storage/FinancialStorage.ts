@@ -26,6 +26,7 @@ const STORAGE_KEYS = {
   GOALS: 'finote:goals',
   BUDGETS: 'finote:budgets',
   RAW_NOTIFICATIONS: 'finote:raw_notifications',
+  DELETED_RAW_NOTIFICATION_IDS: 'finote:deleted_raw_notification_ids',
   PARSER_CACHE: 'finote:parser_cache',
   SYNC_METADATA: 'finote:sync_metadata',
   APP_CONFIG: 'finote:app_config',
@@ -88,8 +89,12 @@ export class FinancialStorage {
 
   static async deleteTransaction(id: string): Promise<void> {
     const transactions = await this.getAllTransactions();
+    const transaction = transactions.find(t => t.id === id);
     const filtered = transactions.filter(t => t.id !== id);
     await AsyncStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(filtered));
+    if (transaction?.rawNotificationId) {
+      await this.addDeletedRawNotificationId(transaction.rawNotificationId);
+    }
   }
 
   static async searchTransactions(query: string): Promise<FinancialTransaction[]> {
@@ -268,6 +273,19 @@ export class FinancialStorage {
     await AsyncStorage.removeItem(STORAGE_KEYS.RAW_NOTIFICATIONS);
   }
 
+  static async addDeletedRawNotificationId(id: string): Promise<void> {
+    const ids = await this.getDeletedRawNotificationIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.DELETED_RAW_NOTIFICATION_IDS, JSON.stringify(ids));
+  }
+
+  static async getDeletedRawNotificationIds(): Promise<string[]> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.DELETED_RAW_NOTIFICATION_IDS);
+    return data ? JSON.parse(data) : [];
+  }
+
   /**
    * PARSER CACHE
    */
@@ -358,7 +376,6 @@ export class FinancialStorage {
   static async calculateFinancialSummary(
     period: SummaryPeriodType,
   ): Promise<FinancialSummary> {
-    const transactions = await this.getAllTransactions();
     const now = Date.now();
 
     let startDate: number;
@@ -396,8 +413,22 @@ export class FinancialStorage {
         startDate = 0;
         endDate = now;
         break;
+
+      case 'customRange':
+        startDate = startOfDay(now);
+        endDate = now;
+        break;
     }
 
+    return this.calculateFinancialSummaryByRange(startDate, endDate, period);
+  }
+
+  static async calculateFinancialSummaryByRange(
+    startDate: number,
+    endDate: number,
+    period: SummaryPeriodType = 'customRange',
+  ): Promise<FinancialSummary> {
+    const transactions = await this.getAllTransactions();
     const filtered = transactions.filter(t => t.date >= startDate && t.date <= endDate);
 
     const summary: FinancialSummary = {
@@ -414,22 +445,45 @@ export class FinancialStorage {
       expenseCount: 0,
       topExpenseCategories: [],
       topIncomeCategories: [],
+      sourceSummary: [],
       dailyCashflow: [],
     };
 
+    const sourceMap: Record<string, FinancialSummary['sourceSummary'][number]> = {};
+
     filtered.forEach(t => {
+      const sourceName = formatTransactionSourceName(t);
+      const sourceKey = `${t.sourceType}:${t.sourcePackageName ?? sourceName}`;
+      if (!sourceMap[sourceKey]) {
+        sourceMap[sourceKey] = {
+          sourceName,
+          sourcePackageName: t.sourcePackageName,
+          sourceType: t.sourceType,
+          income: 0,
+          expense: 0,
+          net: 0,
+          count: 0,
+        };
+      }
+      sourceMap[sourceKey].count++;
+
       if (t.type === 'income') {
         summary.totalIncome += t.amount;
         summary.incomeCount++;
         summary.incomeByCategory[t.category] = (summary.incomeByCategory[t.category] || 0) + t.amount;
+        sourceMap[sourceKey].income += t.amount;
       } else if (t.type === 'expense') {
         summary.totalExpense += t.amount;
         summary.expenseCount++;
         summary.expenseByCategory[t.category] = (summary.expenseByCategory[t.category] || 0) + t.amount;
+        sourceMap[sourceKey].expense += t.amount;
       }
+      sourceMap[sourceKey].net = sourceMap[sourceKey].income - sourceMap[sourceKey].expense;
     });
 
     summary.netCashFlow = summary.totalIncome - summary.totalExpense;
+    summary.sourceSummary = Object.values(sourceMap)
+      .sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
 
     // Top categories
     summary.topExpenseCategories = Object.entries(summary.expenseByCategory)
@@ -519,6 +573,7 @@ export class FinancialStorage {
       AsyncStorage.removeItem(STORAGE_KEYS.GOALS),
       AsyncStorage.removeItem(STORAGE_KEYS.BUDGETS),
       AsyncStorage.removeItem(STORAGE_KEYS.RAW_NOTIFICATIONS),
+      AsyncStorage.removeItem(STORAGE_KEYS.DELETED_RAW_NOTIFICATION_IDS),
       AsyncStorage.removeItem(STORAGE_KEYS.PARSER_CACHE),
       AsyncStorage.removeItem(STORAGE_KEYS.SYNC_METADATA),
       AsyncStorage.removeItem(STORAGE_KEYS.APP_CONFIG),
@@ -536,9 +591,25 @@ function startOfWeek(timestamp: number): number {
   return date.getTime();
 }
 
+function startOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
 function startOfMonth(timestamp: number): number {
   const date = new Date(timestamp);
   date.setDate(1);
   date.setHours(0, 0, 0, 0);
   return date.getTime();
+}
+
+function formatTransactionSourceName(transaction: FinancialTransaction): string {
+  if (transaction.sourceApp?.trim()) {
+    return transaction.sourceApp.trim();
+  }
+  if (transaction.sourcePackageName?.trim()) {
+    return transaction.sourcePackageName.trim();
+  }
+  return transaction.sourceType === 'manual' ? 'Manual Entry' : 'Auto Capture';
 }

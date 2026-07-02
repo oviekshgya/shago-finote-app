@@ -22,26 +22,57 @@ import {buildAiAnalysisPayload} from '../services/ReportPayloadService';
 import {FinancialStorage} from '../storage/FinancialStorage';
 
 const monthlyBudget = 5000000;
+const dayMs = 24 * 60 * 60 * 1000;
+
+type GoalProgress = {
+  current: number;
+  target: number;
+};
 
 export default function DashboardScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const [period, setPeriod] = useState<SummaryPeriodType>('month');
-  const {summary, loading, refresh} = useFinancialSummary(period);
+  const [customStartDate, setCustomStartDate] = useState(startOfDay(Date.now() - 6 * dayMs));
+  const [customEndDate, setCustomEndDate] = useState(endOfDay(Date.now()));
+  const {summary, loading, refresh} = useFinancialSummary(period, customStartDate, customEndDate);
   const [refreshing, setRefreshing] = useState(false);
+  const [rangeModalVisible, setRangeModalVisible] = useState(false);
   const [aiModalVisible, setAiModalVisible] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<AiAnalysisResult | null>(null);
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [allTimeSaving, setAllTimeSaving] = useState(0);
+  const [goalProgressMap, setGoalProgressMap] = useState<Record<string, GoalProgress>>({});
+  const [comparisonSummary, setComparisonSummary] = useState<FinancialSummary | null>(null);
 
   const loadGoalState = useCallback(async () => {
     const [storedGoals, allSummary] = await Promise.all([
       FinancialStorage.getAllGoals(),
       FinancialStorage.calculateFinancialSummary('all'),
     ]);
-    setGoals(storedGoals.filter(goal => !goal.isArchived).sort((a, b) => a.targetDate - b.targetDate));
+    const activeGoals = storedGoals
+      .filter(goal => !goal.isArchived)
+      .sort((a, b) => getGoalStartDate(a) - getGoalStartDate(b));
+    const goalProgressEntries = await Promise.all(
+      activeGoals.map(async goal => {
+        const goalSummary = await FinancialStorage.calculateFinancialSummaryByRange(
+          getGoalStartDate(goal),
+          getGoalEndDate(goal),
+          'customRange',
+        );
+        return [
+          goal.id,
+          {
+            current: Math.max(goalSummary.netCashFlow, 0),
+            target: goal.targetAmount,
+          },
+        ] as const;
+      }),
+    );
+    setGoals(activeGoals);
+    setGoalProgressMap(Object.fromEntries(goalProgressEntries));
     setAllTimeSaving(Math.max(allSummary.netCashFlow, 0));
   }, []);
 
@@ -65,6 +96,21 @@ export default function DashboardScreen(): React.JSX.Element {
     return () => subscription.remove();
   }, [loadGoalState]);
 
+  useEffect(() => {
+    if (!summary) {
+      setComparisonSummary(null);
+      return;
+    }
+    const range = buildComparisonRange(summary);
+    if (!range) {
+      setComparisonSummary(null);
+      return;
+    }
+    FinancialStorage.calculateFinancialSummaryByRange(range.startDate, range.endDate, 'customRange')
+      .then(setComparisonSummary)
+      .catch(() => setComparisonSummary(null));
+  }, [summary]);
+
   const handleAnalyzeAi = async () => {
     setAiModalVisible(true);
     setAiLoading(true);
@@ -72,6 +118,8 @@ export default function DashboardScreen(): React.JSX.Element {
     try {
       const payload = await buildAiAnalysisPayload({
         periodType: period,
+        startDate: period === 'customRange' ? customStartDate : undefined,
+        endDate: period === 'customRange' ? customEndDate : undefined,
         prompt: 'Analisis apakah saya sudah hemat atau boros. Berikan saran agar pengeluaran saya lebih irit berdasarkan transaksi ini.',
       });
       const result = await analyzeFinance(payload);
@@ -84,9 +132,13 @@ export default function DashboardScreen(): React.JSX.Element {
   };
 
   const budgetUsed = summary ? Math.min(summary.totalExpense / monthlyBudget, 1) : 0;
-  const primaryGoal = goals[0];
-  const goalProgress = primaryGoal && primaryGoal.targetAmount > 0
-    ? Math.min(allTimeSaving / primaryGoal.targetAmount, 1)
+  const totalGoalTarget = goals.reduce((sum, goal) => sum + goal.targetAmount, 0);
+  const totalGoalCurrent = goals.reduce(
+    (sum, goal) => sum + Math.min(goalProgressMap[goal.id]?.current ?? 0, goal.targetAmount),
+    0,
+  );
+  const goalProgress = totalGoalTarget > 0
+    ? Math.min(totalGoalCurrent / totalGoalTarget, 1)
     : 0;
 
   return (
@@ -116,7 +168,12 @@ export default function DashboardScreen(): React.JSX.Element {
           </Pressable>
         </View>
 
-        <PeriodSelector value={period} onChange={setPeriod} />
+        <PeriodSelector
+          value={period}
+          rangeLabel={formatRangeShort(customStartDate, customEndDate)}
+          onChange={setPeriod}
+          onOpenRange={() => setRangeModalVisible(true)}
+        />
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -127,6 +184,7 @@ export default function DashboardScreen(): React.JSX.Element {
             <BalanceCard summary={summary} />
 
             <SectionHeader title="Insights" action={formatPeriodAction(period)} />
+            <ComparisonCard current={summary} previous={comparisonSummary} />
             <View style={styles.insightGrid}>
               <InsightCard
                 title="Income"
@@ -142,12 +200,17 @@ export default function DashboardScreen(): React.JSX.Element {
               />
             </View>
 
+            <SummaryChart summary={summary} />
+
+            <SourceOverview sources={summary.sourceSummary} />
+
             <SpendingOverview summary={summary} budgetUsed={budgetUsed} />
 
             <SectionHeader title="Goals" action={`${Math.round(goalProgress * 100)}%`} />
             <GoalCard
-              goal={primaryGoal}
-              currentSaving={allTimeSaving}
+              goals={goals}
+              target={totalGoalTarget}
+              currentAmount={totalGoalCurrent}
               progress={goalProgress}
               onPress={() => navigation.navigate('Bills')}
             />
@@ -187,6 +250,18 @@ export default function DashboardScreen(): React.JSX.Element {
             result={aiResult}
             onClose={() => setAiModalVisible(false)}
           />
+          <DateRangeModal
+            visible={rangeModalVisible}
+            startDate={customStartDate}
+            endDate={customEndDate}
+            onClose={() => setRangeModalVisible(false)}
+            onApply={(startDate, endDate) => {
+              setCustomStartDate(startDate);
+              setCustomEndDate(endDate);
+              setPeriod('customRange');
+              setRangeModalVisible(false);
+            }}
+          />
         </>
       ) : null}
     </View>
@@ -195,36 +270,59 @@ export default function DashboardScreen(): React.JSX.Element {
 
 function PeriodSelector({
   value,
+  rangeLabel,
   onChange,
+  onOpenRange,
 }: {
   value: SummaryPeriodType;
+  rangeLabel: string;
   onChange(value: SummaryPeriodType): void;
+  onOpenRange(): void;
 }) {
-  const items: Array<{value: typeof value; label: string}> = [
+  const items: Array<{value: SummaryPeriodType; label: string}> = [
     {value: 'today', label: 'Today'},
     {value: 'week', label: 'Week'},
     {value: 'month', label: 'Month'},
     {value: 'all', label: 'All'},
-    {value: 'lastWeek', label: 'Last Week'},
-    {value: 'lastMonth', label: 'Last Month'},
+    {value: 'lastWeek', label: 'Prev Week'},
+    {value: 'lastMonth', label: 'Prev Month'},
   ];
 
   return (
-    <View style={styles.segment}>
-      {items.map(item => (
+    <View style={styles.periodBlock}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.periodScroll}>
+        {items.map(item => (
+          <Pressable
+            key={item.value}
+            style={[styles.segmentButton, value === item.value && styles.segmentButtonActive]}
+            onPress={() => onChange(item.value)}>
+            <Text
+              style={[
+                styles.segmentText,
+                value === item.value && styles.segmentTextActive,
+              ]}>
+              {item.label}
+            </Text>
+          </Pressable>
+        ))}
         <Pressable
-          key={item.value}
-          style={[styles.segmentButton, value === item.value && styles.segmentButtonActive]}
-          onPress={() => onChange(item.value)}>
+          style={[styles.segmentButton, styles.rangeButton, value === 'customRange' && styles.segmentButtonActive]}
+          onPress={onOpenRange}>
           <Text
             style={[
               styles.segmentText,
-              value === item.value && styles.segmentTextActive,
+              value === 'customRange' && styles.segmentTextActive,
             ]}>
-            {item.label}
+            Range
           </Text>
         </Pressable>
-      ))}
+      </ScrollView>
+      {value === 'customRange' ? (
+        <Text style={styles.rangeLabel}>{rangeLabel}</Text>
+      ) : null}
     </View>
   );
 }
@@ -298,6 +396,110 @@ function InsightCard({
   );
 }
 
+function ComparisonCard({
+  current,
+  previous,
+}: {
+  current: FinancialSummary;
+  previous: FinancialSummary | null;
+}) {
+  if (!previous || current.period === 'all') {
+    return null;
+  }
+
+  const netDiff = current.netCashFlow - previous.netCashFlow;
+  const expenseDiff = current.totalExpense - previous.totalExpense;
+  const incomeDiff = current.totalIncome - previous.totalIncome;
+
+  return (
+    <View style={styles.compareCard}>
+      <View style={styles.overviewHeader}>
+        <View>
+          <Text style={styles.cardTitle}>Period comparison</Text>
+          <Text style={styles.cardSubtitle}>
+            {formatRangeShort(current.startDate, current.endDate)} vs {formatRangeShort(previous.startDate, previous.endDate)}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.compareGrid}>
+        <CompareMetric label="Income" value={incomeDiff} positiveGood />
+        <CompareMetric label="Expense" value={expenseDiff} positiveGood={false} />
+        <CompareMetric label="Net" value={netDiff} positiveGood />
+      </View>
+    </View>
+  );
+}
+
+function CompareMetric({
+  label,
+  value,
+  positiveGood,
+}: {
+  label: string;
+  value: number;
+  positiveGood: boolean;
+}) {
+  const isPositive = value >= 0;
+  const good = positiveGood ? isPositive : !isPositive;
+  return (
+    <View style={styles.compareMetric}>
+      <Text style={styles.compareLabel}>{label}</Text>
+      <Text style={[styles.compareValue, good ? styles.compareGood : styles.compareBad]}>
+        {isPositive ? '+' : '-'}{formatCurrency(Math.abs(value))}
+      </Text>
+    </View>
+  );
+}
+
+function SummaryChart({summary}: {summary: FinancialSummary}) {
+  const rows = summary.dailyCashflow.slice(-7);
+  const maxValue = Math.max(
+    1,
+    ...rows.flatMap(item => [item.income, item.expense, Math.abs(item.net)]),
+  );
+
+  return (
+    <View style={styles.chartCard}>
+      <View style={styles.overviewHeader}>
+        <View>
+          <Text style={styles.cardTitle}>Transaction graph</Text>
+          <Text style={styles.cardSubtitle}>Income, expense, dan net harian</Text>
+        </View>
+      </View>
+      {rows.length === 0 ? (
+        <Text style={styles.mutedText}>Belum ada data grafik pada periode ini.</Text>
+      ) : (
+        <View style={styles.chartBars}>
+          {rows.map(item => (
+            <View key={item.date} style={styles.chartColumn}>
+              <View style={styles.chartStack}>
+                <View style={[styles.chartBar, styles.chartIncome, {height: chartHeight(item.income, maxValue)}]} />
+                <View style={[styles.chartBar, styles.chartExpense, {height: chartHeight(item.expense, maxValue)}]} />
+                <View style={[styles.chartBar, item.net >= 0 ? styles.chartNetPositive : styles.chartNetNegative, {height: chartHeight(Math.abs(item.net), maxValue)}]} />
+              </View>
+              <Text style={styles.chartLabel}>{formatChartDate(item.date)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      <View style={styles.chartLegend}>
+        <LegendDot label="Income" color={colors.teal} />
+        <LegendDot label="Expense" color={colors.red} />
+        <LegendDot label="Net" color={colors.primary} />
+      </View>
+    </View>
+  );
+}
+
+function LegendDot({label, color}: {label: string; color: string}) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, {backgroundColor: color}]} />
+      <Text style={styles.legendText}>{label}</Text>
+    </View>
+  );
+}
+
 function SpendingOverview({
   summary,
   budgetUsed,
@@ -327,21 +529,75 @@ function SpendingOverview({
   );
 }
 
+function SourceOverview({
+  sources,
+}: {
+  sources: FinancialSummary['sourceSummary'];
+}) {
+  const topSources = sources.slice(0, 4);
+  if (topSources.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.sourceCard}>
+      <View style={styles.overviewHeader}>
+        <View>
+          <Text style={styles.cardTitle}>Source activity</Text>
+          <Text style={styles.cardSubtitle}>Uang masuk dan keluar per aplikasi</Text>
+        </View>
+      </View>
+      <View style={styles.sourceList}>
+        {topSources.map(source => (
+          <SourceRow key={`${source.sourceType}-${source.sourcePackageName ?? source.sourceName}`} source={source} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function SourceRow({
+  source,
+}: {
+  source: FinancialSummary['sourceSummary'][number];
+}) {
+  return (
+    <View style={styles.sourceRow}>
+      <View style={styles.sourceAvatar}>
+        <Text style={styles.sourceAvatarText}>{source.sourceName.slice(0, 1).toUpperCase()}</Text>
+      </View>
+      <View style={styles.sourceCopy}>
+        <Text style={styles.sourceName} numberOfLines={1}>{source.sourceName}</Text>
+        <Text style={styles.sourceMeta}>{source.count} transaksi • Net {formatCurrency(source.net)}</Text>
+      </View>
+      <View style={styles.sourceAmounts}>
+        <Text style={styles.sourceIncome}>+{formatCurrency(source.income)}</Text>
+        <Text style={styles.sourceExpense}>-{formatCurrency(source.expense)}</Text>
+      </View>
+    </View>
+  );
+}
+
 function GoalCard({
-  goal,
-  currentSaving,
+  goals,
+  target,
+  currentAmount,
   progress,
   onPress,
 }: {
-  goal?: SavingsGoal;
-  currentSaving: number;
+  goals: SavingsGoal[];
+  target: number;
+  currentAmount: number;
   progress: number;
   onPress(): void;
 }) {
-  const target = goal?.targetAmount ?? 0;
-  const current = goal ? Math.min(currentSaving, goal.targetAmount) : 0;
-  const remaining = Math.max(target - currentSaving, 0);
-  const achieved = Boolean(goal && currentSaving >= goal.targetAmount);
+  const hasGoals = goals.length > 0;
+  const current = hasGoals ? Math.min(currentAmount, target) : 0;
+  const remaining = Math.max(target - currentAmount, 0);
+  const achieved = hasGoals && currentAmount >= target;
+  const title = hasGoals
+    ? goals.length === 1 ? goals[0].name : `${goals.length} goals aktif`
+    : 'Belum ada goal';
 
   return (
     <Pressable style={styles.goalCard} onPress={onPress}>
@@ -349,15 +605,15 @@ function GoalCard({
         <Text style={styles.goalBadgeText}>GO</Text>
       </View>
       <View style={styles.goalMain}>
-        <Text style={styles.goalTitle}>{goal?.name ?? 'Belum ada goal'}</Text>
+        <Text style={styles.goalTitle}>{title}</Text>
         <Text style={styles.goalTarget}>
-          {goal ? `Target ${formatCurrency(target)}` : 'Tap untuk setup target tabungan'}
+          {hasGoals ? `Total target ${formatCurrency(target)}` : 'Tap untuk setup target tabungan'}
         </Text>
         <ProgressBar progress={progress} color={colors.teal} />
         <View style={styles.goalFooter}>
           <Text style={styles.goalCurrent}>{formatCurrency(current)}</Text>
           <Text style={styles.goalNeed}>
-            {goal ? achieved ? 'Berhasil' : `Kurang ${formatCurrency(remaining)}` : 'Setup'}
+            {hasGoals ? achieved ? 'Berhasil' : `Kurang ${formatCurrency(remaining)}` : 'Setup'}
           </Text>
         </View>
       </View>
@@ -618,6 +874,123 @@ function buildMockAiAnalysis(summary: FinancialSummary, budgetUsed: number) {
   };
 }
 
+function DateRangeModal({
+  visible,
+  startDate,
+  endDate,
+  onClose,
+  onApply,
+}: {
+  visible: boolean;
+  startDate: number;
+  endDate: number;
+  onClose(): void;
+  onApply(startDate: number, endDate: number): void;
+}) {
+  const [draftStart, setDraftStart] = useState(startDate);
+  const [draftEnd, setDraftEnd] = useState(endDate);
+  const [mode, setMode] = useState<'start' | 'end'>('start');
+  const [month, setMonth] = useState(startOfMonth(startDate));
+
+  useEffect(() => {
+    if (visible) {
+      setDraftStart(startDate);
+      setDraftEnd(endDate);
+      setMode('start');
+      setMonth(startOfMonth(startDate));
+    }
+  }, [endDate, startDate, visible]);
+
+  const monthDate = new Date(month);
+  const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
+  const blanks = Array.from({length: firstDay}, (_, index) => `blank-${index}`);
+  const days = Array.from({length: daysInMonth}, (_, index) => index + 1);
+  const monthLabel = monthDate.toLocaleDateString('id-ID', {month: 'long', year: 'numeric'});
+
+  const selectDate = (value: number) => {
+    if (mode === 'start') {
+      const nextStart = startOfDay(value);
+      setDraftStart(nextStart);
+      if (nextStart > draftEnd) {
+        setDraftEnd(endOfDay(nextStart));
+      }
+      setMode('end');
+      return;
+    }
+    const nextEnd = endOfDay(value);
+    setDraftEnd(nextEnd < draftStart ? endOfDay(draftStart) : nextEnd);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.rangeSheet} onPress={event => event.stopPropagation()}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalEyebrow}>Custom range</Text>
+          <Text style={styles.aiTitle}>Pilih periode</Text>
+          <View style={styles.rangeTabs}>
+            <Pressable
+              style={[styles.rangeTab, mode === 'start' && styles.rangeTabActive]}
+              onPress={() => setMode('start')}>
+              <Text style={[styles.rangeTabLabel, mode === 'start' && styles.rangeTabLabelActive]}>Start</Text>
+              <Text style={[styles.rangeTabDate, mode === 'start' && styles.rangeTabDateActive]}>{formatRangeDate(draftStart)}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.rangeTab, mode === 'end' && styles.rangeTabActive]}
+              onPress={() => setMode('end')}>
+              <Text style={[styles.rangeTabLabel, mode === 'end' && styles.rangeTabLabelActive]}>End</Text>
+              <Text style={[styles.rangeTabDate, mode === 'end' && styles.rangeTabDateActive]}>{formatRangeDate(draftEnd)}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.dateModalHeader}>
+            <Pressable style={styles.monthButton} onPress={() => setMonth(addMonths(month, -1))}>
+              <Text style={styles.monthButtonText}>{'<'}</Text>
+            </Pressable>
+            <Text style={styles.monthTitle}>{monthLabel}</Text>
+            <Pressable style={styles.monthButton} onPress={() => setMonth(addMonths(month, 1))}>
+              <Text style={styles.monthButtonText}>{'>'}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.weekRow}>
+            {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(day => (
+              <Text key={day} style={styles.weekText}>{day}</Text>
+            ))}
+          </View>
+
+          <View style={styles.daysGrid}>
+            {blanks.map(item => <View key={item} style={styles.dayCell} />)}
+            {days.map(day => {
+              const value = new Date(monthDate.getFullYear(), monthDate.getMonth(), day, 9, 0, 0, 0).getTime();
+              const selected = sameDate(value, draftStart) || sameDate(value, draftEnd);
+              const inRange = value >= startOfDay(draftStart) && value <= endOfDay(draftEnd);
+              return (
+                <Pressable
+                  key={day}
+                  style={[styles.dayCell, inRange && styles.dayCellInRange, selected && styles.dayCellSelected]}
+                  onPress={() => selectDate(value)}>
+                  <Text style={[styles.dayText, selected && styles.dayTextSelected]}>{day}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.rangeActions}>
+            <Pressable style={styles.rangeCancelButton} onPress={onClose}>
+              <Text style={styles.rangeCancelText}>Batal</Text>
+            </Pressable>
+            <Pressable style={styles.rangeApplyButton} onPress={() => onApply(startOfDay(draftStart), endOfDay(draftEnd))}>
+              <Text style={styles.rangeApplyText}>Terapkan</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function formatPeriodAction(period: SummaryPeriodType): string {
   const labels: Record<SummaryPeriodType, string> = {
     today: 'Today',
@@ -626,8 +999,101 @@ function formatPeriodAction(period: SummaryPeriodType): string {
     all: 'All time',
     lastWeek: 'Last week',
     lastMonth: 'Last month',
+    customRange: 'Custom range',
   };
   return labels[period];
+}
+
+function buildComparisonRange(summary: FinancialSummary): {startDate: number; endDate: number} | null {
+  if (summary.period === 'all') {
+    return null;
+  }
+  if (summary.period === 'today') {
+    const endDate = startOfDay(summary.startDate) - 1;
+    return {startDate: startOfDay(endDate), endDate: endOfDay(endDate)};
+  }
+  if (summary.period === 'week') {
+    const endDate = startOfWeek(summary.startDate) - 1;
+    return {startDate: startOfWeek(endDate), endDate};
+  }
+  if (summary.period === 'month') {
+    const endDate = startOfMonth(summary.startDate) - 1;
+    return {startDate: startOfMonth(endDate), endDate};
+  }
+  const duration = Math.max(dayMs, summary.endDate - summary.startDate);
+  const endDate = summary.startDate - 1;
+  return {startDate: endDate - duration, endDate};
+}
+
+function getGoalStartDate(goal: SavingsGoal): number {
+  return startOfDay(goal.startDate ?? goal.targetDate ?? Date.now());
+}
+
+function getGoalEndDate(goal: SavingsGoal): number {
+  return endOfDay(goal.endDate ?? goal.targetDate ?? Date.now());
+}
+
+function chartHeight(value: number, maxValue: number): number {
+  if (value <= 0) {
+    return 3;
+  }
+  return Math.max(8, Math.round((value / maxValue) * 82));
+}
+
+function formatChartDate(date: string): string {
+  return new Date(date).toLocaleDateString('id-ID', {day: '2-digit', month: 'short'});
+}
+
+function formatRangeShort(startDate: number, endDate: number): string {
+  return `${formatRangeDate(startDate)} - ${formatRangeDate(endDate)}`;
+}
+
+function formatRangeDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('id-ID', {day: '2-digit', month: 'short'});
+}
+
+function startOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function endOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(23, 59, 59, 999);
+  return date.getTime();
+}
+
+function startOfWeek(timestamp: number): number {
+  const date = new Date(timestamp);
+  const day = date.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + mondayOffset);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function startOfMonth(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function addMonths(timestamp: number, offset: number): number {
+  const date = new Date(timestamp);
+  date.setMonth(date.getMonth() + offset);
+  return startOfMonth(date.getTime());
+}
+
+function sameDate(left: number, right: number): boolean {
+  const a = new Date(left);
+  const b = new Date(right);
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 function formatCategoryLabel(category: TransactionCategory): string {
@@ -690,25 +1156,27 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '900',
   },
-  segment: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    padding: 4,
+  periodBlock: {
     borderRadius: radii.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: 16,
+    paddingVertical: 6,
+  },
+  periodScroll: {
+    paddingHorizontal: 6,
+    gap: 7,
   },
   segmentButton: {
-    flexGrow: 1,
-    minWidth: '30%',
+    minWidth: 78,
     minHeight: 36,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 12,
   },
+  rangeButton: {},
   segmentButtonActive: {
     backgroundColor: colors.primary,
   },
@@ -719,6 +1187,13 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: colors.surface,
+  },
+  rangeLabel: {
+    marginTop: 6,
+    paddingHorizontal: 12,
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '900',
   },
   loadingContainer: {
     minHeight: 360,
@@ -853,6 +1328,114 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 5,
   },
+  compareCard: {
+    padding: 14,
+    marginBottom: 14,
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
+  },
+  compareGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  compareMetric: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 10,
+    justifyContent: 'center',
+  },
+  compareLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 5,
+  },
+  compareValue: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  compareGood: {
+    color: colors.teal,
+  },
+  compareBad: {
+    color: colors.red,
+  },
+  chartCard: {
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
+  },
+  chartBars: {
+    height: 126,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 4,
+  },
+  chartColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  chartStack: {
+    height: 92,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  chartBar: {
+    width: 7,
+    borderRadius: 4,
+  },
+  chartIncome: {
+    backgroundColor: colors.teal,
+  },
+  chartExpense: {
+    backgroundColor: colors.red,
+  },
+  chartNetPositive: {
+    backgroundColor: colors.primary,
+  },
+  chartNetNegative: {
+    backgroundColor: colors.orange,
+  },
+  chartLabel: {
+    marginTop: 8,
+    color: colors.muted,
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  chartLegend: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
   overviewCard: {
     borderRadius: radii.xl,
     padding: 16,
@@ -861,6 +1444,63 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 16,
     ...shadow,
+  },
+  sourceCard: {
+    borderRadius: radii.xl,
+    padding: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+    ...shadow,
+  },
+  sourceList: {
+    gap: 12,
+  },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sourceAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceAvatarText: {
+    color: colors.primary,
+    fontWeight: '900',
+  },
+  sourceCopy: {
+    flex: 1,
+  },
+  sourceName: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+    marginBottom: 3,
+  },
+  sourceMeta: {
+    color: colors.muted,
+    fontSize: 11,
+  },
+  sourceAmounts: {
+    alignItems: 'flex-end',
+    minWidth: 96,
+  },
+  sourceIncome: {
+    color: colors.teal,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  sourceExpense: {
+    color: colors.red,
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 3,
   },
   overviewHeader: {
     flexDirection: 'row',
@@ -1120,6 +1760,14 @@ const styles = StyleSheet.create({
     padding: 18,
     paddingBottom: 24,
   },
+  rangeSheet: {
+    maxHeight: '90%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: colors.surface,
+    padding: 18,
+    paddingBottom: 24,
+  },
   modalHandle: {
     width: 42,
     height: 4,
@@ -1144,6 +1792,136 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     marginTop: 8,
+  },
+  rangeTabs: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  rangeTab: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  rangeTabActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  rangeTabLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  rangeTabLabelActive: {
+    color: '#ddd5ff',
+  },
+  rangeTabDate: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  rangeTabDateActive: {
+    color: colors.surface,
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  monthButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthButtonText: {
+    color: colors.primary,
+    fontSize: 25,
+    lineHeight: 28,
+    fontWeight: '900',
+  },
+  monthTitle: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  weekText: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.md,
+  },
+  dayCellInRange: {
+    backgroundColor: colors.primarySoft,
+  },
+  dayCellSelected: {
+    backgroundColor: colors.primary,
+  },
+  dayText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dayTextSelected: {
+    color: colors.surface,
+    fontWeight: '900',
+  },
+  rangeActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  rangeCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: radii.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rangeCancelText: {
+    color: colors.ink,
+    fontWeight: '900',
+  },
+  rangeApplyButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rangeApplyText: {
+    color: colors.surface,
+    fontWeight: '900',
   },
   aiScoreCard: {
     marginTop: 16,

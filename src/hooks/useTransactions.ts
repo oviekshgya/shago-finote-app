@@ -136,7 +136,11 @@ export function useTransactions(): UseTransactionsResult {
 /**
  * Hook untuk fetch financial summary
  */
-export function useFinancialSummary(period: SummaryPeriodType = 'month') {
+export function useFinancialSummary(
+  period: SummaryPeriodType = 'month',
+  customStartDate?: number,
+  customEndDate?: number,
+) {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,7 +153,9 @@ export function useFinancialSummary(period: SummaryPeriodType = 'month') {
     setError(null);
     try {
       await TransactionCaptureService.syncFromNotificationModule(NotificationModule);
-      const data = await FinancialStorage.calculateFinancialSummary(period);
+      const data = period === 'customRange' && customStartDate && customEndDate
+        ? await FinancialStorage.calculateFinancialSummaryByRange(customStartDate, customEndDate, period)
+        : await FinancialStorage.calculateFinancialSummary(period);
       setSummary(data);
       hasLoadedRef.current = true;
     } catch (err) {
@@ -157,7 +163,7 @@ export function useFinancialSummary(period: SummaryPeriodType = 'month') {
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [customEndDate, customStartDate, period]);
 
   useEffect(() => {
     hasLoadedRef.current = false;

@@ -51,7 +51,9 @@ export default function TransactionsScreen(): React.JSX.Element {
         const query = search.toLowerCase();
         return (
           t.description.toLowerCase().includes(query) ||
-          (t.merchant?.toLowerCase().includes(query) ?? false)
+          (t.merchant?.toLowerCase().includes(query) ?? false) ||
+          (t.sourceApp?.toLowerCase().includes(query) ?? false) ||
+          (t.sourcePackageName?.toLowerCase().includes(query) ?? false)
         );
       }
       return true;
@@ -77,6 +79,8 @@ export default function TransactionsScreen(): React.JSX.Element {
     date,
     items,
   }));
+
+  const sourceSummary = useMemo(() => buildSourceSummary(filtered), [filtered]);
 
   const confirmDelete = (transaction: FinancialTransaction) => {
     Alert.alert(
@@ -199,6 +203,8 @@ export default function TransactionsScreen(): React.JSX.Element {
         <SummaryPill label="Income" value={formatCurrency(totals.income)} tone="teal" />
         <SummaryPill label="Expense" value={formatCurrency(totals.expense)} tone="pink" />
       </View>
+
+      <SourceSummaryCard sources={sourceSummary} />
 
       <View style={styles.controlsContainer}>
         <TextInput
@@ -427,6 +433,86 @@ function SummaryPill({
   );
 }
 
+type SourceSummaryItem = {
+  sourceName: string;
+  sourcePackageName?: string;
+  income: number;
+  expense: number;
+  net: number;
+  count: number;
+};
+
+function buildSourceSummary(transactions: FinancialTransaction[]): SourceSummaryItem[] {
+  const grouped = new Map<string, SourceSummaryItem>();
+
+  transactions.forEach(transaction => {
+    const sourceName = getTransactionSourceName(transaction);
+    const key = `${transaction.sourceType}:${transaction.sourcePackageName ?? sourceName}`;
+    const current = grouped.get(key) ?? {
+      sourceName,
+      sourcePackageName: transaction.sourcePackageName,
+      income: 0,
+      expense: 0,
+      net: 0,
+      count: 0,
+    };
+
+    current.count++;
+    if (transaction.type === 'income') {
+      current.income += transaction.amount;
+    }
+    if (transaction.type === 'expense') {
+      current.expense += transaction.amount;
+    }
+    current.net = current.income - current.expense;
+    grouped.set(key, current);
+  });
+
+  return [...grouped.values()].sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
+}
+
+function getTransactionSourceName(transaction: FinancialTransaction): string {
+  if (transaction.sourceApp?.trim()) {
+    return transaction.sourceApp.trim();
+  }
+  if (transaction.sourcePackageName?.trim()) {
+    return transaction.sourcePackageName.trim();
+  }
+  return transaction.sourceType === 'manual' ? 'Manual Entry' : 'Auto Capture';
+}
+
+function SourceSummaryCard({sources}: {sources: SourceSummaryItem[]}) {
+  if (sources.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.sourceSummaryCard}>
+      <View style={styles.sourceSummaryHeader}>
+        <View>
+          <Text style={styles.sourceSummaryTitle}>Transaksi per source</Text>
+          <Text style={styles.sourceSummarySubtitle}>Income dan expense berdasarkan aplikasi</Text>
+        </View>
+      </View>
+      {sources.slice(0, 5).map(source => (
+        <View key={`${source.sourcePackageName ?? source.sourceName}`} style={styles.sourceSummaryRow}>
+          <View style={styles.sourceSummaryAvatar}>
+            <Text style={styles.sourceSummaryAvatarText}>{source.sourceName.slice(0, 1).toUpperCase()}</Text>
+          </View>
+          <View style={styles.sourceSummaryCopy}>
+            <Text style={styles.sourceSummaryName} numberOfLines={1}>{source.sourceName}</Text>
+            <Text style={styles.sourceSummaryMeta}>{source.count} transaksi • Net {formatCurrency(source.net)}</Text>
+          </View>
+          <View style={styles.sourceSummaryAmounts}>
+            <Text style={styles.sourceSummaryIncome}>+{formatCurrency(source.income)}</Text>
+            <Text style={styles.sourceSummaryExpense}>-{formatCurrency(source.expense)}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function TransactionItem({
   transaction,
   onPress,
@@ -452,6 +538,9 @@ function TransactionItem({
           {transaction.description}
         </Text>
         <Text style={styles.transactionTime}>{formatTransactionDate(transaction.date)}</Text>
+        <Text style={styles.transactionSource} numberOfLines={1}>
+          {getTransactionSourceName(transaction)}
+        </Text>
       </View>
       <Text style={[styles.transactionAmount, {color: amountColor}]} numberOfLines={1}>
         {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
@@ -637,7 +726,8 @@ function TransactionDetailModal({
               <DetailRow label="Kategori" value={transaction?.category ?? '-'} />
               <DetailRow label="Tanggal transaksi" value={transaction ? formatTransactionDate(transaction.date) : '-'} />
               <DetailRow label="Merchant" value={transaction?.merchant ?? '-'} />
-              <DetailRow label="Sumber" value={transaction?.sourceApp ?? transaction?.sourceType ?? '-'} />
+              <DetailRow label="Sumber" value={transaction ? getTransactionSourceName(transaction) : '-'} />
+              <DetailRow label="Package" value={transaction?.sourcePackageName ?? '-'} />
               <DetailRow label="Referensi" value={transaction?.reference ?? '-'} />
               <DetailRow label="Sync" value={transaction?.syncStatus ?? '-'} />
               <DetailRow label="Dibuat" value={transaction ? formatTransactionDate(transaction.createdAt) : '-'} />
@@ -772,6 +862,77 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
     marginTop: 4,
+  },
+  sourceSummaryCard: {
+    marginHorizontal: 18,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
+  },
+  sourceSummaryHeader: {
+    marginBottom: 10,
+  },
+  sourceSummaryTitle: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  sourceSummarySubtitle: {
+    color: colors.muted,
+    fontSize: 11,
+    marginTop: 3,
+  },
+  sourceSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  sourceSummaryAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceSummaryAvatarText: {
+    color: colors.primary,
+    fontWeight: '900',
+  },
+  sourceSummaryCopy: {
+    flex: 1,
+  },
+  sourceSummaryName: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+    marginBottom: 3,
+  },
+  sourceSummaryMeta: {
+    color: colors.muted,
+    fontSize: 11,
+  },
+  sourceSummaryAmounts: {
+    alignItems: 'flex-end',
+    minWidth: 92,
+  },
+  sourceSummaryIncome: {
+    color: colors.teal,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  sourceSummaryExpense: {
+    color: colors.red,
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 3,
   },
   tealSoft: {
     backgroundColor: colors.tealSoft,
@@ -911,6 +1072,12 @@ const styles = StyleSheet.create({
   transactionTime: {
     fontSize: 11,
     color: colors.muted,
+  },
+  transactionSource: {
+    marginTop: 2,
+    fontSize: 10,
+    color: colors.primary,
+    fontWeight: '800',
   },
   transactionAmount: {
     maxWidth: 92,
